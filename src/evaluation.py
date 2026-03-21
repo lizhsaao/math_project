@@ -18,20 +18,21 @@ def run_cv(model, X, y, cv_folds, random_state):
     return float(scores.mean()), float(scores.std())
 
 
-def one_se_rule(rmse_list, std_list):
+def one_se_rule(rmse_list, std_list, cv_folds):
     """
     One-standard-error rule for selecting the simplest model within one SE of
     the minimum CV RMSE.
 
-    Given parallel lists of CV RMSE and per-fold SD (one entry per depth),
-    returns the index of the shallowest depth whose RMSE falls at or below
-    rmse_min + std_at_min.
+    The standard error of the mean over K folds is SD/sqrt(K), so the
+    threshold is rmse_min + std_at_min / sqrt(cv_folds).
+
+    Returns the index of the shallowest depth whose RMSE falls at or below
+    that threshold.
     """
     rmse = np.asarray(rmse_list)
     std  = np.asarray(std_list)
     i_min = int(np.argmin(rmse))
-    threshold = rmse[i_min] + std[i_min]
-    # First index (simplest model) whose RMSE is within one SE of the minimum
+    threshold = rmse[i_min] + std[i_min] / np.sqrt(cv_folds)
     for i, r in enumerate(rmse):
         if r <= threshold:
             return i
