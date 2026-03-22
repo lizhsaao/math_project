@@ -1,5 +1,7 @@
 from pathlib import Path
 
+WIDTH = 50
+
 DATA_PATH = Path(__file__).parent.parent / "data" / "StudentPerformanceFactors.csv"
 
 TARGET = "Exam_Score"
