@@ -1,18 +1,32 @@
+"""
+    Central configuration: file paths, dataset-specific cleaning rules,
+    and global ML hyperparameters.
+"""
 from pathlib import Path
 
 WIDTH = 50
+BASE_DIR = Path(__file__).parent.parent
+DATA_DIR = BASE_DIR / "data"
+RESULTS_DIR = BASE_DIR / "results"
 
-DATA_PATH = Path(__file__).parent.parent / "data" / "StudentPerformanceFactors.csv"
+# Ensure directories exist
+RESULTS_DIR.mkdir(exist_ok=True)
 
-TARGET = "Exam_Score"
+# Dataset-specific rules
+DATASET_CONFIGS = {
+    "StudentPerformanceFactors.csv": {
+        "target": "Exam_Score",
+        "missing_cols": ["Parental_Education_Level", "Teacher_Quality", "Distance_from_Home"],
+        "limits": {
+            "Exam_Score": (100, "Score > 100"),
+            "Attendance": (100, "Attendance > 100%"),
+            "Sleep_Hours": (24, "Sleep > 24h")
+        }
+    },
+    # Add more here later
+}
+
+# Global ML Hyperparameters
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
 CV_FOLDS = 10
-
-MISSING_COLS = [
-    "Parental_Education_Level",
-    "Teacher_Quality",
-    "Distance_from_Home",
-]
-
-DEPTHS = list(range(1, 21))

@@ -1,0 +1,43 @@
+
+==================================================
+Processing Dataset: StudentPerformanceFactors.csv=
+==================================================
+
+
+--- Data Integrity Inspection ---
+  [PASS] Hours_Studied (Negative Check): 0 issues
+  [PASS] Attendance (Negative Check): 0 issues
+  [PASS] Attendance > 100%: 0 issues
+  [PASS] Sleep_Hours (Negative Check): 0 issues
+  [PASS] Sleep > 24h: 0 issues
+  [PASS] Previous_Scores (Negative Check): 0 issues
+  [PASS] Tutoring_Sessions (Negative Check): 0 issues
+  [PASS] Physical_Activity (Negative Check): 0 issues
+  [PASS] Exam_Score (Negative Check): 0 issues
+  [FAIL] Score > 100: 1 issues
+
+--- Categorical Schema (Manual Review) ---
+  Parental_Involvement: High, Low, Medium
+  Access_to_Resources: High, Low, Medium
+  Extracurricular_Activities: No, Yes
+  Motivation_Level: High, Low, Medium
+  Internet_Access: No, Yes
+  Family_Income: High, Low, Medium
+  Teacher_Quality: High, Low, Medium
+  School_Type: Private, Public
+  Peer_Influence: Negative, Neutral, Positive
+  Learning_Disabilities: No, Yes
+  Parental_Education_Level: College, High School, Postgraduate
+  Distance_from_Home: Far, Moderate, Near
+  Gender: Female, Male
+Schema confirmed. Proceeding...
+
+Cleaned Base: 6606 rows
+Track A (Imputed): 6606 rows
+Track B (Dropped): 6377 rows
+
+==================================================
+===========3. Preprocessing & Encoding============
+==================================================
+
+Final Feature Count: 27

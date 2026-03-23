@@ -1,5 +1,6 @@
 """
-    Defines the logic for the Null Model, Linear Regression, and Decision Trees.
+    Factory functions for the null model, linear regression,
+    and decision tree regressor.
 """
 
 # KFold cross-validation

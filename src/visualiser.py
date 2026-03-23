@@ -1,5 +1,6 @@
 """
-    All your matplotlib and seaborn code.    
+    Diagnostic plots: correlation heatmaps, actual vs. predicted,
+    residual distributions, and tree depth-scan curves.
 """
 
 # Correlation Heatmaps
