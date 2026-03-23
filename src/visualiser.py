@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
 
 # --- Style constants matching the notebook ---
-_COL_A   = "steelblue"   # Track A
+_COL_A   = "steelblue"    # Track A
 _COL_B   = "coral"        # Track B
 _COL_REF = "darkorange"   # reference lines (ideal-fit diagonal, optimal depth vline)
 _COL_LR  = "seagreen"     # LR baseline
@@ -98,6 +98,40 @@ def plot_tuning_curve(history_a, history_b, output_path, lr_rmse_a=None, lr_rmse
         ax.spines["right"].set_visible(False)
 
     fig.suptitle("CV RMSE vs. Tree Depth  (10-fold CV)", fontsize=13)
+    plt.tight_layout()
+    _save(fig, output_path)
+
+
+def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path):
+    """
+    Side-by-side residuals vs. predicted plots for Track A and Track B.
+
+    Parameters
+    ----------
+    y_true_a, y_pred_a : True and predicted values for Track A.
+    y_true_b, y_pred_b : True and predicted values for Track B.
+    model_name         : Model label used in the figure title.
+    output_path        : File path to save the figure.
+    """
+    fig, axes = subplots(1, 2, figsize=(12, 4), sharey=True)
+
+    for ax, y_true, y_pred, col, title in zip(
+        axes,
+        [y_true_a, y_true_b],
+        [y_pred_a, y_pred_b],
+        [_COL_A, _COL_B],
+        ["Track A (Imputed)", "Track B (Dropped)"],
+    ):
+        resid = y_true.values - y_pred
+        ax.scatter(y_pred, resid, color=col, alpha=0.4, s=14, edgecolors="none")
+        ax.axhline(0, linestyle=":", color=_COL_REF, linewidth=1.5)
+        ax.set_xlabel("Predicted Score")
+        ax.set_ylabel("Residual (Actual − Predicted)")
+        ax.set_title(title, fontsize=12)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    fig.suptitle(f"Residuals vs. Predicted — {model_name}", fontsize=13)
     plt.tight_layout()
     _save(fig, output_path)
 

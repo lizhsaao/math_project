@@ -91,6 +91,7 @@ def main():
                     results[name] = metrics
                     preds[name]   = y_pred
                     print(f"  {track_label}: Fitted {name}", file=f)
+                print("\n", file=f)
                 # DT (Optimal) is already fitted inside get_metrics_and_preds
                 return results, preds, history, models_dict["DT (Optimal)"]
 

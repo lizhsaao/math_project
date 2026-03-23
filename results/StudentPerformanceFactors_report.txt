@@ -4,6 +4,11 @@ Processing Dataset: StudentPerformanceFactors.csv=
 ==================================================
 
 
+==================================================
+================1. Load & Inspect=================
+==================================================
+
+
 --- Data Integrity Inspection ---
   [PASS] Hours_Studied (Negative Check): 0 issues
   [PASS] Attendance (Negative Check): 0 issues
@@ -32,6 +37,11 @@ Processing Dataset: StudentPerformanceFactors.csv=
   Gender: Female, Male
 Schema confirmed. Proceeding...
 
+
+==================================================
+====================2. Summary====================
+==================================================
+
 Cleaned Base: 6606 rows
 Track A (Imputed): 6606 rows
 Track B (Dropped): 6377 rows
@@ -39,6 +49,20 @@ Track B (Dropped): 6377 rows
 ==================================================
 ===========3. Preprocessing & Encoding============
 ==================================================
+
+  Track A: Fitted Null Model
+  Track A: Fitted Linear Regression
+  Track A: Fitted DT (Depth 3)
+  Track A: Fitted DT (Unconstrained)
+  Track A: Fitted DT (Optimal)
+
+
+  Track B: Fitted Null Model
+  Track B: Fitted Linear Regression
+  Track B: Fitted DT (Depth 3)
+  Track B: Fitted DT (Unconstrained)
+  Track B: Fitted DT (Optimal)
+
 
 Final Feature Count: 27
 
