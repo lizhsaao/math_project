@@ -70,12 +70,24 @@ def get_metrics_and_preds(X_train, y_train, X_test, y_test, model):
     }
     return metrics, y_pred
 
-# DummyRegressor (Null Model) function
+def cv_rmse_lr(X_train, y_train):
+    """
+    Computes the 10-fold CV RMSE for Linear Regression on the training set.
+    Used as the reference baseline on the DT tuning curve, so both the curve
+    and the baseline are on the same metric (CV RMSE, not hold-out RMSE).
 
+    Parameters
+    ----------
+    X_train : Training feature matrix (80%).
+    y_train : Training response vector.
 
-
-# Linear Regression and Decision Tree fitting
-
-
-
-# Hyperparameter tuning (Tree Depth Search)
+    Returns
+    -------
+    mean_rmse : Mean CV RMSE across folds.
+    """
+    kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+    scores = cross_val_score(
+        LinearRegression(), X_train, y_train,
+        cv=kf, scoring='neg_root_mean_squared_error'
+    )
+    return float(-np.mean(scores))
