@@ -10,7 +10,7 @@ from sklearn.dummy import DummyRegressor
 from src.config import DATA_DIR, RESULTS_DIR, DATASET_CONFIGS, WIDTH, DEPTHS, RANDOM_STATE
 from src.data_loader import load_and_clean, inspect_data
 from src.preprocessing import preprocess_track
-from src.models import tune_decision_tree, get_metrics_and_preds
+from src.models import tune_decision_tree, get_metrics_and_preds, cv_rmse_lr
 from src.visualiser import plot_tuning_curve, plot_actual_vs_predicted, plot_residuals, plot_feature_importance
 from src.evaluator import create_summary_table
 
@@ -104,9 +104,10 @@ def main():
             # 4. Modeling & Visualisation
             print_header("4. Model Evaluation & Visualisation", file=f)
 
-            # LR hold-out RMSE used as the reference line in the tuning curve
-            lr_rmse_a = results_a["Linear Regression"]["rmse"]
-            lr_rmse_b = results_b["Linear Regression"]["rmse"]
+            # LR CV RMSE on training set — same metric as the DT curve, so the
+            # baseline sits on a comparable scale
+            lr_rmse_a = cv_rmse_lr(X_ta, y_ta)
+            lr_rmse_b = cv_rmse_lr(X_tb, y_tb)
 
             # Tuning curve — both tracks side by side
             plot_tuning_curve(hist_a, hist_b, f"{prefix}_DT_tuning.png", lr_rmse_a, lr_rmse_b)
