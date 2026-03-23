@@ -41,3 +41,16 @@ Track B (Dropped): 6377 rows
 ==================================================
 
 Final Feature Count: 27
+
+==================================================
+=======4. Model Evaluation & Visualisation========
+==================================================
+
+
+Final Model Comparison (Strict 80/20 Test Evaluation):
+             Model Track A (RMSE) Track A R² Track B (RMSE) Track B R²
+        Null Model         3.6401    -0.0020         3.9566    -0.0001
+ Linear Regression         1.5213     0.8250         2.0410     0.7339
+      DT (Depth 3)         2.5644     0.5027         3.0075     0.4222
+DT (Unconstrained)         3.6741    -0.0208         3.6533     0.1474
+      DT (Optimal)         2.3862     0.5694         2.9416     0.4472
