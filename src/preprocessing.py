@@ -54,9 +54,9 @@ def preprocess_track(df, target, requires_imputation=False):
     # Align test to training columns only (join="left").
     # Any category in test that wasn't in train is dropped.
     # Any train column missing from test is filled with 0.
-    X_train_final, X_test_final = X_train_enc.align(
+    X_train, X_test = X_train_enc.align(
         X_test_enc, join="left", axis=1, fill_value=0
     )
     
     # X_test is locked — CV in main.py uses X_train only.
-    return X_train_final, X_test_final, y_train, y_test
+    return X_train, X_test, y_train, y_test
