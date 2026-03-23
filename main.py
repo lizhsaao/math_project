@@ -11,7 +11,7 @@ from src.config import DATA_DIR, RESULTS_DIR, DATASET_CONFIGS, WIDTH, DEPTHS, RA
 from src.data_loader import load_and_clean, inspect_data
 from src.preprocessing import preprocess_track
 from src.models import tune_decision_tree, get_metrics_and_preds
-from src.visualiser import plot_tuning_curve, plot_actual_vs_predicted, plot_feature_importance
+from src.visualiser import plot_tuning_curve, plot_actual_vs_predicted, plot_residuals, plot_feature_importance
 from src.evaluator import create_summary_table
 
 class Tee:
@@ -53,6 +53,7 @@ def main():
             print_header(f"Processing Dataset: {filename}", file=f)
             
             # 1. Load & Inspect
+            print_header("1. Load & Inspect", file=f)
             df_raw, df_clean, df_imp, df_drop = load_and_clean(
                 data_path, cfg['target'], cfg['missing_cols'], cfg['limits']
             )
@@ -63,6 +64,7 @@ def main():
             sys.stdout = old_stdout
 
             # 2. Summary
+            print_header("2. Summary", file=f)
             print(f"Cleaned Base: {df_clean.shape[0]} rows", file=f)
             print(f"Track A (Imputed): {df_imp.shape[0]} rows", file=f)
             print(f"Track B (Dropped): {df_drop.shape[0]} rows", file=f)
@@ -71,13 +73,8 @@ def main():
             print_header("3. Preprocessing & Encoding", file=f)
             X_ta, X_va, y_ta, y_va = preprocess_track(df_imp, requires_imputation=True, target=cfg['target'])
             X_tb, X_vb, y_tb, y_vb = preprocess_track(df_drop, requires_imputation=False, target=cfg['target'])
-            
-            print(f"Final Feature Count: {X_ta.shape[1]}", file=f)
 
-            # 4. Modeling & Visualisation
-            print_header("4. Model Evaluation & Visualisation", file=f)
-
-            def run_track(X_tr, X_te, y_tr, y_te):
+            def run_track(X_tr, X_te, y_tr, y_te, track_label):
                 """Fits all 5 models; returns results, predictions, tuning history, and fitted optimal DT."""
                 best_d, history = tune_decision_tree(X_tr, y_tr, DEPTHS)
                 models_dict = {
@@ -93,12 +90,18 @@ def main():
                     metrics, y_pred = get_metrics_and_preds(X_tr, y_tr, X_te, y_te, model)
                     results[name] = metrics
                     preds[name]   = y_pred
+                    print(f"  {track_label}: Fitted {name}", file=f)
                 # DT (Optimal) is already fitted inside get_metrics_and_preds
                 return results, preds, history, models_dict["DT (Optimal)"]
 
             # Run both tracks before plotting so side-by-side figures can be produced
-            results_a, preds_a, hist_a, opt_dt_a = run_track(X_ta, X_va, y_ta, y_va)
-            results_b, preds_b, hist_b, opt_dt_b = run_track(X_tb, X_vb, y_tb, y_vb)
+            results_a, preds_a, hist_a, opt_dt_a = run_track(X_ta, X_va, y_ta, y_va, "Track A")
+            results_b, preds_b, hist_b, opt_dt_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
+
+            print(f"Final Feature Count: {X_ta.shape[1]}", file=f)
+
+            # 4. Modeling & Visualisation
+            print_header("4. Model Evaluation & Visualisation", file=f)
 
             # LR hold-out RMSE used as the reference line in the tuning curve
             lr_rmse_a = results_a["Linear Regression"]["rmse"]
@@ -113,6 +116,14 @@ def main():
                 plot_actual_vs_predicted(
                     y_va, preds_a[name], y_vb, preds_b[name],
                     name, f"{prefix}_{clean}_actual_vs_pred.png"
+                )
+
+            # Residuals vs. predicted — LR and DT (Optimal) only
+            for name in ["Linear Regression", "DT (Optimal)"]:
+                clean = name.replace(" ", "_").replace("(", "").replace(")", "")
+                plot_residuals(
+                    y_va, preds_a[name], y_vb, preds_b[name],
+                    name, f"{prefix}_{clean}_residuals.png"
                 )
 
             # Feature importance — both tracks side by side, optimal DT only
