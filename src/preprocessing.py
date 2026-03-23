@@ -28,18 +28,16 @@ def preprocess_track(df, target, requires_imputation=False):
     )
     
     # 2. DYNAMIC IMPUTATION (On Training Data Only)
+    # Apply training-set stats to both sets to handle test-set
+    # NaNs without data leakage.
     if requires_imputation:
         for col in train_df.columns:
-            if train_df[col].isnull().any():
-                # Dynamically choose median or mode based on data type
-                if train_df[col].dtype == 'object' or train_df[col].dtype.name == 'category':
-                    fill_val = train_df[col].mode()[0]
-                else:
-                    fill_val = train_df[col].median()
-                
-                # Apply the train-derived value to BOTH sets
-                train_df[col] = train_df[col].fillna(fill_val)
-                test_df[col] = test_df[col].fillna(fill_val)
+            if train_df[col].dtype == 'object' or train_df[col].dtype.name == 'category':
+                fill_val = train_df[col].mode()[0]
+            else:
+                fill_val = train_df[col].median()
+            train_df[col] = train_df[col].fillna(fill_val)
+            test_df[col] = test_df[col].fillna(fill_val)
 
     # 3. DYNAMIC ONE-HOT ENCODING
     y_train = train_df[target]
