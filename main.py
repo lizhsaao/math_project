@@ -1,6 +1,7 @@
 """
     Entry point. Iterates over all datasets in DATASET_CONFIGS,
-    runs the full pipeline, and saves a per-dataset report to results/.
+    runs the full pipeline, and saves all outputs (report + plots)
+    into a per-dataset subdirectory under results/.
 """
 import sys
 from sklearn.linear_model import LinearRegression
@@ -11,7 +12,9 @@ from src.config import DATA_DIR, RESULTS_DIR, DATASET_CONFIGS, WIDTH, DEPTHS, RA
 from src.data_loader import load_and_clean, inspect_data
 from src.preprocessing import preprocess_track
 from src.models import tune_decision_tree, get_metrics_and_preds, cv_rmse_lr
-from src.visualiser import plot_tuning_curve, plot_actual_vs_predicted, plot_residuals, plot_feature_importance
+from src.visualiser import (plot_exam_score_distribution, plot_correlation_with_target,
+                            plot_tuning_curve, plot_actual_vs_predicted,
+                            plot_residuals, plot_feature_importance)
 from src.evaluator import create_summary_table
 
 class Tee:
@@ -45,10 +48,11 @@ def main():
             print(f"Skipping {filename}: File not found.")
             continue
 
-        # Define alphabetical prefix (e.g., results/StudentPerformanceFactors)
-        prefix = RESULTS_DIR / filename.split('.')[0]
-        report_path = f"{prefix}_report.txt"
-        
+        # One subdirectory per dataset (e.g., results/StudentPerformanceFactors/)
+        out_dir = RESULTS_DIR / filename.split('.')[0]
+        out_dir.mkdir(parents=True, exist_ok=True)
+        report_path = out_dir / "report.txt"
+
         with open(report_path, "w") as f:
             print_header(f"Processing Dataset: {filename}", file=f)
             
@@ -62,6 +66,10 @@ def main():
             sys.stdout = Tee(sys.__stdout__, f)
             inspect_data(df_raw, cfg['target'], cfg['limits'])
             sys.stdout = old_stdout
+
+            # EDA plots
+            plot_exam_score_distribution(df_clean, cfg['target'], out_dir / "score_distribution.png")
+            plot_correlation_with_target(df_imp, df_drop, cfg['target'], out_dir / "correlation.png")
 
             # 2. Summary
             print_header("2. Summary", file=f)
@@ -110,14 +118,14 @@ def main():
             lr_rmse_b = cv_rmse_lr(X_tb, y_tb)
 
             # Tuning curve — both tracks side by side
-            plot_tuning_curve(hist_a, hist_b, f"{prefix}_DT_tuning.png", lr_rmse_a, lr_rmse_b)
+            plot_tuning_curve(hist_a, hist_b, out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b)
 
             # Actual vs. predicted — one side-by-side figure per model
             for name in ["Null Model", "Linear Regression", "DT (Depth 3)", "DT (Unconstrained)", "DT (Optimal)"]:
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_actual_vs_predicted(
                     y_va, preds_a[name], y_vb, preds_b[name],
-                    name, f"{prefix}_{clean}_actual_vs_pred.png"
+                    name, out_dir / f"{clean}_actual_vs_pred.png"
                 )
 
             # Residuals vs. predicted — LR and DT (Optimal) only
@@ -125,13 +133,13 @@ def main():
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_residuals(
                     y_va, preds_a[name], y_vb, preds_b[name],
-                    name, f"{prefix}_{clean}_residuals.png"
+                    name, out_dir / f"{clean}_residuals.png"
                 )
 
             # Feature importance — both tracks side by side, optimal DT only
             plot_feature_importance(
                 opt_dt_a, opt_dt_b, X_ta.columns, X_tb.columns,
-                f"{prefix}_feature_importance.png"
+                out_dir / "feature_importance.png"
             )
 
             # 5. Final Comparison Table
@@ -139,7 +147,7 @@ def main():
             print("\nFinal Model Comparison (Strict 80/20 Test Evaluation):", file=f)
             print(summary_df.to_string(index=False), file=f)
 
-        print(f"Done: {filename} (Report and graphs saved to {report_path})")
+        print(f"Done: {filename} → {out_dir}/")
 
 if __name__ == "__main__":
     main()
