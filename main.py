@@ -6,12 +6,13 @@
 import sys
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.dummy import DummyRegressor
 
-from src.config import DATA_DIR, RESULTS_DIR, DATASET_CONFIGS, WIDTH, DEPTHS, RANDOM_STATE
+from src.config import DATA_DIR, RESULTS_DIR, DATASET_CONFIGS, WIDTH, DEPTHS, N_ESTIMATORS, RANDOM_STATE
 from src.data_loader import load_and_clean, inspect_data
 from src.preprocessing import preprocess_track
-from src.models import tune_decision_tree, get_metrics_and_preds, cv_rmse_lr
+from src.models import tune_decision_tree, tune_random_forest, get_metrics_and_preds, cv_rmse_lr
 from src.visualiser import (plot_exam_score_distribution, plot_correlation_with_target,
                             plot_tuning_curve, plot_actual_vs_predicted,
                             plot_residuals, plot_feature_importance)
@@ -83,14 +84,17 @@ def main():
             X_tb, X_vb, y_tb, y_vb = preprocess_track(df_drop, requires_imputation=False, target=cfg['target'])
 
             def run_track(X_tr, X_te, y_tr, y_te, track_label):
-                """Fits all 5 models; returns results, predictions, tuning history, and fitted optimal DT."""
-                best_d, history = tune_decision_tree(X_tr, y_tr, DEPTHS)
+                """Fits all 6 models; returns results, predictions, DT history, RF history,
+                fitted optimal DT, and fitted optimal RF."""
+                best_d, dt_history = tune_decision_tree(X_tr, y_tr, DEPTHS)
+                best_n, rf_history = tune_random_forest(X_tr, y_tr, N_ESTIMATORS)
                 models_dict = {
                     "Null Model":         DummyRegressor(strategy="mean"),
                     "Linear Regression":  LinearRegression(),
                     "DT (Depth 3)":       DecisionTreeRegressor(max_depth=3, random_state=RANDOM_STATE),
                     "DT (Unconstrained)": DecisionTreeRegressor(max_depth=None, random_state=RANDOM_STATE),
                     "DT (Optimal)":       DecisionTreeRegressor(max_depth=best_d, random_state=RANDOM_STATE),
+                    "Random Forest":      RandomForestRegressor(n_estimators=best_n, random_state=RANDOM_STATE, n_jobs=-1),
                 }
                 results, preds = {}, {}
                 for name, model in models_dict.items():
@@ -100,14 +104,23 @@ def main():
                     preds[name]   = y_pred
                     print(f"  {track_label}: Fitted {name}", file=f)
                 print("\n", file=f)
-                # DT (Optimal) is already fitted inside get_metrics_and_preds
-                return results, preds, history, models_dict["DT (Optimal)"]
+                # Models are fitted in-place by get_metrics_and_preds
+                return results, preds, dt_history, rf_history, models_dict["DT (Optimal)"], models_dict["Random Forest"]
 
             # Run both tracks before plotting so side-by-side figures can be produced
-            results_a, preds_a, hist_a, opt_dt_a = run_track(X_ta, X_va, y_ta, y_va, "Track A")
-            results_b, preds_b, hist_b, opt_dt_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
+            results_a, preds_a, hist_dt_a, hist_rf_a, opt_dt_a, opt_rf_a = run_track(X_ta, X_va, y_ta, y_va, "Track A")
+            results_b, preds_b, hist_dt_b, hist_rf_b, opt_dt_b, opt_rf_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
 
             print(f"Final Feature Count: {X_ta.shape[1]}", file=f)
+
+            # Optimal DT depths — plain text to report, ANSI colour to terminal
+            depth_a = opt_dt_a.max_depth
+            depth_b = opt_dt_b.max_depth
+            print(f"Optimal DT depth — Track A: {depth_a},  Track B: {depth_b}", file=f)
+            sys.__stdout__.write(
+                f"  Optimal DT depth — \033[34mTrack A: {depth_a}\033[0m,"
+                f"  \033[32mTrack B: {depth_b}\033[0m\n"
+            )
 
             # 4. Modeling & Visualisation
             print_header("4. Model Evaluation & Visualisation", file=f)
@@ -117,29 +130,43 @@ def main():
             lr_rmse_a = cv_rmse_lr(X_ta, y_ta)
             lr_rmse_b = cv_rmse_lr(X_tb, y_tb)
 
-            # Tuning curve — both tracks side by side
-            plot_tuning_curve(hist_a, hist_b, out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b)
+            # DT tuning curve — CV RMSE vs tree depth
+            plot_tuning_curve(hist_dt_a, hist_dt_b, out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b)
+
+            # RF tuning curve — CV RMSE vs n_estimators
+            plot_tuning_curve(
+                hist_rf_a, hist_rf_b, out_dir / "RF_tuning.png", lr_rmse_a, lr_rmse_b,
+                x_key="n_estimators", x_label="Number of Trees",
+                suptitle="CV RMSE vs. Number of Trees  (10-fold CV)"
+            )
 
             # Actual vs. predicted — one side-by-side figure per model
-            for name in ["Null Model", "Linear Regression", "DT (Depth 3)", "DT (Unconstrained)", "DT (Optimal)"]:
+            for name in ["Null Model", "Linear Regression", "DT (Depth 3)", "DT (Unconstrained)", "DT (Optimal)", "Random Forest"]:
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_actual_vs_predicted(
                     y_va, preds_a[name], y_vb, preds_b[name],
                     name, out_dir / f"{clean}_actual_vs_pred.png"
                 )
 
-            # Residuals vs. predicted — LR and DT (Optimal) only
-            for name in ["Linear Regression", "DT (Optimal)"]:
+            # Residuals vs. predicted — LR, DT (Optimal), and RF
+            for name in ["Linear Regression", "DT (Optimal)", "Random Forest"]:
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_residuals(
                     y_va, preds_a[name], y_vb, preds_b[name],
                     name, out_dir / f"{clean}_residuals.png"
                 )
 
-            # Feature importance — both tracks side by side, optimal DT only
+            # Feature importance — DT (Optimal)
             plot_feature_importance(
                 opt_dt_a, opt_dt_b, X_ta.columns, X_tb.columns,
-                out_dir / "feature_importance.png"
+                out_dir / "DT_feature_importance.png"
+            )
+
+            # Feature importance — Random Forest (more stable; averaged across all trees)
+            plot_feature_importance(
+                opt_rf_a, opt_rf_b, X_ta.columns, X_tb.columns,
+                out_dir / "RF_feature_importance.png",
+                model_name="Random Forest"
             )
 
             # 5. Final Comparison Table
