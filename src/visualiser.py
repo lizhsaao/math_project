@@ -120,15 +120,24 @@ def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name,
     _save(fig, output_path)
 
 
-def plot_tuning_curve(history_a, history_b, output_path, lr_rmse_a=None, lr_rmse_b=None):
+def plot_tuning_curve(history_a, history_b, output_path,
+                      lr_rmse_a=None, lr_rmse_b=None,
+                      x_key="depth", x_label="Tree Depth",
+                      suptitle="CV RMSE vs. Tree Depth  (10-fold CV)",
+                      n_folds=10):
     """
-    Side-by-side CV RMSE vs. tree depth with ±1 s.d. band and optional LR baseline.
+    Side-by-side CV RMSE tuning curve with ±1 s.d. band, 1-SE threshold line,
+    and optional LR baseline. Works for any hyperparameter scan.
 
     Parameters
     ----------
-    history_a, history_b : Lists of {"depth", "rmse", "std"} dicts (one per track).
+    history_a, history_b : Lists of {"<x_key>", "rmse", "std"} dicts (one per track).
     output_path          : File path to save the figure.
-    lr_rmse_a, lr_rmse_b : Optional LR hold-out RMSE drawn as a reference line.
+    lr_rmse_a, lr_rmse_b : Optional LR CV RMSE drawn as a reference line.
+    x_key                : Key in history dicts used for the x-axis (default "depth").
+    x_label              : x-axis label string (default "Tree Depth").
+    suptitle             : Figure-level title (default matches DT depth scan).
+    n_folds              : Number of CV folds used; needed to compute SE (default 10).
     """
     fig, axes = subplots(1, 2, figsize=(13, 5), sharey=True)
 
@@ -139,30 +148,45 @@ def plot_tuning_curve(history_a, history_b, output_path, lr_rmse_a=None, lr_rmse
         [lr_rmse_a, lr_rmse_b],
         ["Track A (Imputed)", "Track B (Dropped)"],
     ):
-        df      = pd.DataFrame(history)
-        depths   = df["depth"].values
+        df       = pd.DataFrame(history)
+        x_vals   = df[x_key].values
         rmse_arr = df["rmse"].values
         std_arr  = df["std"].values
-        opt_d    = int(df.loc[df["rmse"].idxmin(), "depth"])
 
-        ax.plot(depths, rmse_arr, "o-", color=col, markersize=5, label="CV RMSE")
-        ax.fill_between(depths, rmse_arr - std_arr, rmse_arr + std_arr,
+        # 1-SE rule: horizontal line at min RMSE; interpolate the exact x where
+        # the lower ±1 s.d. boundary (rmse - std) crosses that line going left.
+        min_idx   = int(np.argmin(rmse_arr))
+        threshold = float(rmse_arr[min_idx])
+        lower_arr = rmse_arr - std_arr
+
+        # Linear interpolation between the last point above and first point below
+        cross_x = float(x_vals[0])   # fallback: first point already below
+        for i in range(len(x_vals) - 1):
+            if lower_arr[i] > threshold and lower_arr[i + 1] <= threshold:
+                t = (threshold - lower_arr[i]) / (lower_arr[i + 1] - lower_arr[i])
+                cross_x = float(x_vals[i] + t * (x_vals[i + 1] - x_vals[i]))
+                break
+
+        ax.plot(x_vals, rmse_arr, "o-", color=col, markersize=5, label="CV RMSE")
+        ax.fill_between(x_vals, lower_arr, rmse_arr + std_arr,
                         alpha=0.15, color=col, label="±1 s.d.")
-        ax.axvline(opt_d, linestyle="--", color=_COL_REF,
-                   label=f"Optimal depth = {opt_d}")
+        ax.axhline(threshold, linestyle="--", color="crimson", linewidth=1.2,
+                   label=f"Min RMSE ({threshold:.3f})")
+        ax.axvline(cross_x, linestyle="--", color=_COL_REF,
+                   label=f"1-SE crossing = {cross_x:.1f}")
 
         if lr_rmse is not None:
             ax.axhline(lr_rmse, linestyle=":", color=_COL_LR, linewidth=1.5,
                        label=f"LR baseline  ({lr_rmse:.3f})")
 
         ax.set_title(title, fontsize=12)
-        ax.set_xlabel("Tree Depth")
+        ax.set_xlabel(x_label)
         ax.set_ylabel("CV RMSE")
         ax.legend(fontsize=8)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-    fig.suptitle("CV RMSE vs. Tree Depth  (10-fold CV)", fontsize=13)
+    fig.suptitle(suptitle, fontsize=13)
     plt.tight_layout()
     _save(fig, output_path)
 
@@ -201,7 +225,8 @@ def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_pa
     _save(fig, output_path)
 
 
-def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output_path):
+def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output_path,
+                            model_name="DT (Optimal)"):
     """
     Side-by-side horizontal bar charts of the top 10 feature importances.
 
@@ -210,6 +235,7 @@ def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output
     model_a, model_b           : Fitted tree estimators with feature_importances_.
     feat_names_a, feat_names_b : Column names from each track's training matrix.
     output_path                : File path to save the figure.
+    model_name                 : Model label used in the figure title (default "DT (Optimal)").
     """
     fig, axes = subplots(1, 2, figsize=(14, 6))
 
@@ -230,6 +256,6 @@ def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-    fig.suptitle("Top 10 Feature Importances — DT (Optimal)", fontsize=13)
+    fig.suptitle(f"Top 10 Feature Importances — {model_name}", fontsize=13)
     plt.tight_layout()
     _save(fig, output_path)

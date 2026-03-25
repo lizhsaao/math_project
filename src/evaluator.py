@@ -9,7 +9,7 @@ def create_summary_table(results_a, results_b):
     """
     data = []
     # Match the five models you requested
-    models = ["Null Model", "Linear Regression", "DT (Depth 3)", "DT (Unconstrained)", "DT (Optimal)"]
+    models = ["Null Model", "Linear Regression", "DT (Depth 3)", "DT (Unconstrained)", "DT (Optimal)", "Random Forest"]
     
     for m in models:
         data.append({
