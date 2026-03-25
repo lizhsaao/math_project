@@ -1,18 +1,21 @@
 """
     Factory functions for the null model, linear regression,
-    and decision tree regressor.
+    decision tree regressor, and random forest regressor.
 """
 import numpy as np
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.dummy import DummyRegressor
 from sklearn.metrics import root_mean_squared_error, r2_score
 from src.config import CV_FOLDS, RANDOM_STATE
 
 def tune_decision_tree(X_train, y_train, depths):
     """
-    Finds the optimal tree depth using 10-fold CV on the 80% Training Set only.
+    Finds the optimal tree depth using 10-fold CV on the 80% training set only,
+    applying the one-standard-error rule: select the shallowest depth whose
+    mean CV RMSE lies within one SE of the minimum.
 
     Parameters
     ----------
@@ -22,25 +25,69 @@ def tune_decision_tree(X_train, y_train, depths):
 
     Returns
     -------
-    best_depth : Integer depth with the lowest mean RMSE.
-    history    : List of dictionaries for plotting the tuning curve.
+    best_depth : Shallowest depth within 1 SE of the minimum CV RMSE.
+    history    : List of {"depth", "rmse", "std"} dicts for plotting.
     """
     kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     history = []
-    
+
     for d in depths:
-        model = DecisionTreeRegressor(max_depth=d, random_state=RANDOM_STATE)
-        # CV only on training data (80% portion)
         scores = cross_val_score(
-            model, X_train, y_train, cv=kf, scoring='neg_root_mean_squared_error'
+            DecisionTreeRegressor(max_depth=d, random_state=RANDOM_STATE),
+            X_train, y_train, cv=kf, scoring='neg_root_mean_squared_error'
         )
-        avg_rmse = -np.mean(scores)
-        std_rmse = np.std(-scores)   # needed for ±1 s.d. band in tuning plot
-        history.append({"depth": d, "rmse": avg_rmse, "std": std_rmse})
-            
-    # Identify depth with the minimum mean RMSE
-    best_depth = min(history, key=lambda x: x['rmse'])['depth']
+        history.append({"depth": d, "rmse": float(-np.mean(scores)),
+                        "std": float(np.std(-scores))})
+
+    # 1-SE rule: shallowest depth whose lower ±1 s.d. bound touches the minimum RMSE.
+    # Equivalent to finding where (rmse - std) ≤ min_rmse on the tuning curve.
+    rmse_arr  = np.array([h['rmse'] for h in history])
+    std_arr   = np.array([h['std']  for h in history])
+    min_rmse  = float(rmse_arr[int(np.argmin(rmse_arr))])
+    lower_arr = rmse_arr - std_arr
+    best_depth = next(h['depth'] for h, lb in zip(history, lower_arr) if lb <= min_rmse)
     return best_depth, history
+
+def tune_random_forest(X_train, y_train, n_estimators_list):
+    """
+    Scans n_estimators via 10-fold CV on the 80% training set only, applying
+    the one-standard-error rule: select the fewest trees whose mean CV RMSE
+    lies within one SE of the minimum.
+
+    Parameters
+    ----------
+    X_train          : Training feature matrix (80%).
+    y_train          : Training response vector.
+    n_estimators_list: List of n_estimators values to evaluate.
+
+    Returns
+    -------
+    best_n  : Fewest trees within 1 SE of the minimum CV RMSE.
+    history : List of {"n_estimators", "rmse", "std"} dicts (one per candidate).
+    """
+    kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+    history = []
+
+    for n in n_estimators_list:
+        scores = cross_val_score(
+            RandomForestRegressor(n_estimators=n, random_state=RANDOM_STATE, n_jobs=-1),
+            X_train, y_train,
+            cv=kf, scoring='neg_root_mean_squared_error'
+        )
+        history.append({
+            "n_estimators": n,
+            "rmse": float(-np.mean(scores)),
+            "std":  float(np.std(-scores))
+        })
+
+    # 1-SE rule: fewest trees whose lower ±1 s.d. bound touches the minimum RMSE.
+    rmse_arr  = np.array([h['rmse'] for h in history])
+    std_arr   = np.array([h['std']  for h in history])
+    min_rmse  = float(rmse_arr[int(np.argmin(rmse_arr))])
+    lower_arr = rmse_arr - std_arr
+    best_n = next(h['n_estimators'] for h, lb in zip(history, lower_arr) if lb <= min_rmse)
+    return best_n, history
+
 
 def get_metrics_and_preds(X_train, y_train, X_test, y_test, model):
     """
