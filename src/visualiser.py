@@ -1,7 +1,8 @@
 """
-    Diagnostic plots: correlation heatmaps, actual vs. predicted,
-    residual distributions, and tree depth-scan curves.
+    Diagnostic plots: EDA (target distribution, correlations), actual vs. predicted,
+    residual distributions, tree depth-scan curves, and feature importances.
 """
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
@@ -17,6 +18,70 @@ def _save(fig, output_path):
     """Saves the figure at 150 dpi and closes it."""
     fig.savefig(output_path, bbox_inches="tight", dpi=150)
     plt.close(fig)
+
+
+def plot_exam_score_distribution(df, target, output_path):
+    """
+    Histogram of the target variable with a Normal distribution overlay.
+
+    Parameters
+    ----------
+    df          : DataFrame containing the target column.
+    target      : Name of the target/response variable column.
+    output_path : File path to save the figure.
+    """
+    mu  = df[target].mean()
+    sig = df[target].std()
+    x   = np.linspace(mu - 4 * sig, mu + 4 * sig, 300)
+    pdf = (1 / (sig * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mu) / sig) ** 2)
+
+    fig, ax = subplots(figsize=(7, 4))
+    ax.hist(df[target], bins=20, density=True,
+            color=_COL_A, alpha=0.7, edgecolor="white", label="Observed")
+    ax.plot(x, pdf, "r-", linewidth=2,
+            label=f"Normal fit (μ = {mu:.2f}, σ = {sig:.2f})")
+    ax.set_title(f"Distribution of {target}", fontsize=13)
+    ax.set_xlabel(target)
+    ax.set_ylabel("Density")
+    ax.legend(fontsize=8)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    plt.tight_layout()
+    _save(fig, output_path)
+
+
+def plot_correlation_with_target(df_a, df_b, target, output_path):
+    """
+    Side-by-side horizontal bar charts of Pearson correlations between each
+    numerical predictor and the target variable, for Track A and Track B.
+
+    Parameters
+    ----------
+    df_a, df_b  : DataFrames for Track A (imputed) and Track B (dropped).
+    target      : Name of the target/response variable column.
+    output_path : File path to save the figure.
+    """
+    corr_a = df_a.corr(numeric_only=True)[target].drop(target).sort_values()
+    corr_b = df_b.corr(numeric_only=True)[target].drop(target).sort_values()
+
+    fig, axes = subplots(1, 2, figsize=(12, 4))
+
+    for ax, corr, col, title in zip(
+        axes,
+        [corr_a, corr_b],
+        [_COL_A, _COL_B],
+        ["Track A (Imputed)", "Track B (Dropped)"],
+    ):
+        ax.barh(corr.index, corr.values, color=col, alpha=0.85)
+        ax.axvline(0, color="black", linewidth=0.8)
+        ax.set_title(title, fontsize=12)
+        ax.set_xlabel(f"Pearson r with {target}")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    fig.suptitle(f"Correlation with {target}", fontsize=13)
+    plt.tight_layout()
+    _save(fig, output_path)
 
 
 def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path):
