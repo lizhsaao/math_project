@@ -19,12 +19,19 @@ DATASET_CONFIGS = {
         "target": "Exam_Score",
         "missing_cols": ["Parental_Education_Level", "Teacher_Quality", "Distance_from_Home"],
         "limits": {
+            # Target Limit
             "Exam_Score": (100, "Score > 100"),
+            
+            # Predictor Limits
             "Attendance": (100, "Attendance > 100%"),
-            "Sleep_Hours": (24, "Sleep > 24h")
+            "Sleep_Hours": (24, "Sleep > 24h/night"),
+            "Previous_Scores": (100, "Previous Score > 100"),
+            "Hours_Studied": (168, "Studying > 168h/week"),
+            "Physical_Activity": (168, "Activity > 168h/week"),
+            "Tutoring_Sessions": (60, "Tutoring > 60 sessions/month")
         }
     },
-    # Add more here later
+    
 }
 
 # Global ML Hyperparameters

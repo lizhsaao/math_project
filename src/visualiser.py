@@ -9,9 +9,9 @@ from matplotlib.pyplot import subplots
 
 # --- Style constants matching the notebook ---
 _COL_A   = "steelblue"    # Track A
-_COL_B   = "coral"        # Track B
+_COL_B   = "mediumseagreen"        # Track B
 _COL_REF = "darkorange"   # reference lines (ideal-fit diagonal, optimal depth vline)
-_COL_LR  = "seagreen"     # LR baseline
+_COL_LR  = "gray"     # LR baseline
 
 
 def _save(fig, output_path):
@@ -261,27 +261,26 @@ def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output
     _save(fig, output_path)
 
 
-def plot_lasso_tuning_curve(history_a, history_b, output_path, n_folds=10):
+def plot_lasso_tuning_curve(history_a, history_b, output_path,
+                            lr_rmse_a=None, lr_rmse_b=None, n_folds=10):
     """
     Side-by-side CV RMSE vs. Lasso alpha on a log x-axis, with ±1 s.d. band and
     1-SE selection line (rightmost crossing: largest parsimonious alpha).
-
-    No LR baseline is drawn: at α -> 0 Lasso reduces to OLS, so the left-most
-    point of the curve already represents the LR performance — a separate
-    reference line would simply overlap the minimum RMSE line.
 
     Parameters
     ----------
     history_a, history_b : Lists of {"alpha", "rmse", "std"} dicts (one per track).
     output_path          : File path to save the figure.
+    lr_rmse_a, lr_rmse_b : Optional LR CV RMSE reference lines (one per track).
     n_folds              : Number of CV folds used (default 10).
     """
     fig, axes = subplots(1, 2, figsize=(13, 5), sharey=True)
 
-    for ax, history, col, title in zip(
+    for ax, history, col, lr_rmse, title in zip(
         axes,
         [history_a, history_b],
         [_COL_A, _COL_B],
+        [lr_rmse_a, lr_rmse_b],
         ["Track A (Imputed)", "Track B (Dropped)"],
     ):
         df       = pd.DataFrame(history)
@@ -294,9 +293,7 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path, n_folds=10):
         lower_arr = rmse_arr - std_arr
 
         # 1-SE rule for Lasso: scan right to left for the RIGHTMOST crossing
-        # (largest alpha whose lower bound still ≤ min RMSE). Interpolate in
-        # log space so the vertical line sits correctly on the log x-axis.
-        cross_x = float(x_vals[min_idx])   # fallback: at minimum
+        cross_x = float(x_vals[min_idx])
         for i in range(len(x_vals) - 1, 0, -1):
             if lower_arr[i] > threshold and lower_arr[i - 1] <= threshold:
                 t = (threshold - lower_arr[i - 1]) / (lower_arr[i] - lower_arr[i - 1])
@@ -309,10 +306,19 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path, n_folds=10):
         ax.plot(x_vals, rmse_arr, "o-", color=col, markersize=4, label="CV RMSE")
         ax.fill_between(x_vals, lower_arr, rmse_arr + std_arr,
                         alpha=0.15, color=col, label="±1 s.d.")
+        
+        # Min RMSE line (Red)
         ax.axhline(threshold, linestyle="--", color="crimson", linewidth=1.2,
                    label=f"Min RMSE ({threshold:.3f})")
+        
+        # 1-SE crossing (Orange)
         ax.axvline(cross_x, linestyle="--", color=_COL_REF,
                    label=f"1-SE crossing = {cross_x:.3g}")
+
+        # ADDED: LR baseline (Green dotted)
+        if lr_rmse is not None:
+            ax.axhline(lr_rmse, linestyle=":", color=_COL_LR, linewidth=1.5,
+                       label=f"LR baseline  ({lr_rmse:.3f})")
 
         ax.set_xscale("log")
         ax.set_title(title, fontsize=12)
@@ -321,7 +327,7 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path, n_folds=10):
         ax.legend(fontsize=8)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-
+        
     fig.suptitle("CV RMSE vs. Lasso α  (10-fold CV)", fontsize=13)
     plt.tight_layout()
     _save(fig, output_path)

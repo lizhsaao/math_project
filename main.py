@@ -4,19 +4,27 @@
     into a per-dataset subdirectory under results/.
 """
 import sys
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.dummy import DummyRegressor
 
-from src.config import DATA_DIR, RESULTS_DIR, DATASET_CONFIGS, WIDTH, DEPTHS, N_ESTIMATORS, RANDOM_STATE
+from src.config import (DATA_DIR, RESULTS_DIR, DATASET_CONFIGS, WIDTH,
+                        DEPTHS, N_ESTIMATORS, LASSO_ALPHAS, RANDOM_STATE)
 from src.data_loader import load_and_clean, inspect_data
 from src.preprocessing import preprocess_track
-from src.models import tune_decision_tree, tune_random_forest, get_metrics_and_preds, cv_rmse_lr
+from src.models import tune_decision_tree, tune_random_forest, tune_lasso, get_metrics_and_preds, cv_rmse_lr
 from src.visualiser import (plot_exam_score_distribution, plot_correlation_with_target,
                             plot_tuning_curve, plot_actual_vs_predicted,
-                            plot_residuals, plot_feature_importance)
+                            plot_residuals, plot_feature_importance,
+                            plot_lasso_tuning_curve, plot_lasso_coefficients)
 from src.evaluator import create_summary_table
+
+# Canonical model order used as the default when models=None is passed to main().
+ALL_MODELS = [
+    "Null Model", "Linear Regression", "Lasso",
+    "DT (Depth 3)", "DT (Unconstrained)", "DT (Optimal)", "Random Forest",
+]
 
 class Tee:
     """Writes to multiple streams at once — terminal and report file simultaneously."""
@@ -41,8 +49,27 @@ def print_header(text, file=None):
     output = f"\n{'=' * WIDTH}\n{text.center(WIDTH, '=')}\n{'=' * WIDTH}\n"
     print(output, file=file or sys.stdout)
 
-def main():
-    """Runs the full pipeline for every dataset listed in DATASET_CONFIGS."""
+def main(models=None):
+    """
+    Runs the modelling pipeline for every dataset listed in DATASET_CONFIGS.
+
+    Parameters
+    ----------
+    models : Which models to fit and evaluate.
+             - None (default): all models in ALL_MODELS.
+             - str: a single model name, e.g. "Random Forest".
+             - list[str]: an explicit ordered subset, e.g. ["Linear Regression", "Lasso"].
+             Only the requested models are tuned, fitted, and plotted, so omitting
+             slow models (e.g. "Random Forest") speeds up the run significantly.
+    """
+    # Resolve models parameter to an ordered list
+    if models is None:
+        model_list = ALL_MODELS
+    elif isinstance(models, str):
+        model_list = [models]
+    else:
+        model_list = list(models)
+
     for filename, cfg in DATASET_CONFIGS.items():
         data_path = DATA_DIR / filename
         if not data_path.exists():
@@ -56,7 +83,7 @@ def main():
 
         with open(report_path, "w") as f:
             print_header(f"Processing Dataset: {filename}", file=f)
-            
+
             # 1. Load & Inspect
             print_header("1. Load & Inspect", file=f)
             df_raw, df_clean, df_imp, df_drop = load_and_clean(
@@ -78,103 +105,171 @@ def main():
             print(f"Track A (Imputed): {df_imp.shape[0]} rows", file=f)
             print(f"Track B (Dropped): {df_drop.shape[0]} rows", file=f)
 
-            # 3. Preprocessing (Standardised naming)
+            # 3. Preprocessing & Encoding
             print_header("3. Preprocessing & Encoding", file=f)
-            X_ta, X_va, y_ta, y_va = preprocess_track(df_imp, requires_imputation=True, target=cfg['target'])
+            X_ta, X_va, y_ta, y_va = preprocess_track(df_imp,  requires_imputation=True,  target=cfg['target'])
             X_tb, X_vb, y_tb, y_vb = preprocess_track(df_drop, requires_imputation=False, target=cfg['target'])
 
             def run_track(X_tr, X_te, y_tr, y_te, track_label):
-                """Fits all 6 models; returns results, predictions, DT history, RF history,
-                fitted optimal DT, and fitted optimal RF."""
-                best_d, dt_history = tune_decision_tree(X_tr, y_tr, DEPTHS)
-                best_n, rf_history = tune_random_forest(X_tr, y_tr, N_ESTIMATORS)
-                models_dict = {
+                """
+                Tunes and fits only the models in model_list, then evaluates each
+                on the held-out 20% test set.
+
+                Returns
+                -------
+                results  : dict  model_name -> {"rmse", "r2"}
+                preds    : dict  model_name -> y_pred array
+                histories: dict  tuning key -> history list
+                           Keys: "DT" | "RF" | "Lasso" (only present if tuning ran)
+                fitted   : dict  model_name -> fitted estimator
+                           Only models with tunable hyperparameters are stored here.
+                """
+                # --- Conditional tuning (only for requested models) ---
+                histories = {}
+
+                best_d = None
+                if "DT (Optimal)" in model_list:
+                    best_d, dt_hist = tune_decision_tree(X_tr, y_tr, DEPTHS)
+                    histories["DT"] = dt_hist
+
+                best_n = None
+                if "Random Forest" in model_list:
+                    best_n, rf_hist = tune_random_forest(X_tr, y_tr, N_ESTIMATORS)
+                    histories["RF"] = rf_hist
+
+                best_alpha = None
+                if "Lasso" in model_list:
+                    best_alpha, lasso_hist = tune_lasso(X_tr, y_tr, LASSO_ALPHAS)
+                    histories["Lasso"] = lasso_hist
+
+                # --- Full catalogue; filter to requested models only ---
+                catalogue = {
                     "Null Model":         DummyRegressor(strategy="mean"),
                     "Linear Regression":  LinearRegression(),
-                    "DT (Depth 3)":       DecisionTreeRegressor(max_depth=3, random_state=RANDOM_STATE),
+                    "Lasso":              Lasso(alpha=best_alpha, max_iter=10_000) if best_alpha is not None else None,
+                    "DT (Depth 3)":       DecisionTreeRegressor(max_depth=3,    random_state=RANDOM_STATE),
                     "DT (Unconstrained)": DecisionTreeRegressor(max_depth=None, random_state=RANDOM_STATE),
-                    "DT (Optimal)":       DecisionTreeRegressor(max_depth=best_d, random_state=RANDOM_STATE),
-                    "Random Forest":      RandomForestRegressor(n_estimators=best_n, random_state=RANDOM_STATE, n_jobs=-1),
+                    "DT (Optimal)":       DecisionTreeRegressor(max_depth=best_d, random_state=RANDOM_STATE) if best_d is not None else None,
+                    "Random Forest":      RandomForestRegressor(n_estimators=best_n, random_state=RANDOM_STATE, n_jobs=-1) if best_n is not None else None,
                 }
-                results, preds = {}, {}
-                for name, model in models_dict.items():
-                    # Evaluate on 'locked' 20% test set
+                models_to_run = {k: v for k, v in catalogue.items()
+                                 if k in model_list and v is not None}
+
+                results, preds, fitted = {}, {}, {}
+                for name, model in models_to_run.items():
                     metrics, y_pred = get_metrics_and_preds(X_tr, y_tr, X_te, y_te, model)
                     results[name] = metrics
                     preds[name]   = y_pred
+                    fitted[name]  = model
                     print(f"  {track_label}: Fitted {name}", file=f)
                 print("\n", file=f)
-                # Models are fitted in-place by get_metrics_and_preds
-                return results, preds, dt_history, rf_history, models_dict["DT (Optimal)"], models_dict["Random Forest"]
+                return results, preds, histories, fitted
 
             # Run both tracks before plotting so side-by-side figures can be produced
-            results_a, preds_a, hist_dt_a, hist_rf_a, opt_dt_a, opt_rf_a = run_track(X_ta, X_va, y_ta, y_va, "Track A")
-            results_b, preds_b, hist_dt_b, hist_rf_b, opt_dt_b, opt_rf_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
+            results_a, preds_a, hist_a, fitted_a = run_track(X_ta, X_va, y_ta, y_va, "Track A")
+            results_b, preds_b, hist_b, fitted_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
 
             print(f"Final Feature Count: {X_ta.shape[1]}", file=f)
 
-            # Optimal DT depths — plain text to report, ANSI colour to terminal
-            depth_a = opt_dt_a.max_depth
-            depth_b = opt_dt_b.max_depth
-            print(f"Optimal DT depth — Track A: {depth_a},  Track B: {depth_b}", file=f)
-            sys.__stdout__.write(
-                f"  Optimal DT depth — \033[34mTrack A: {depth_a}\033[0m,"
-                f"  \033[32mTrack B: {depth_b}\033[0m\n"
-            )
+            # Optimal hyperparameters — plain text to report, ANSI colour to terminal
+            if "DT (Optimal)" in fitted_a:
+                depth_a = fitted_a["DT (Optimal)"].max_depth
+                depth_b = fitted_b["DT (Optimal)"].max_depth
+                print(f"Optimal DT depth — Track A: {depth_a},  Track B: {depth_b}", file=f)
+                sys.__stdout__.write(
+                    f"  Optimal DT depth — \033[34mTrack A: {depth_a}\033[0m,"
+                    f"  \033[32mTrack B: {depth_b}\033[0m\n"
+                )
+
+            if "Lasso" in fitted_a:
+                alpha_a = fitted_a["Lasso"].alpha
+                alpha_b = fitted_b["Lasso"].alpha
+                print(f"Optimal Lasso α  — Track A: {alpha_a:.4g},  Track B: {alpha_b:.4g}", file=f)
+                sys.__stdout__.write(
+                    f"  Optimal Lasso α  — \033[34mTrack A: {alpha_a:.4g}\033[0m,"
+                    f"  \033[32mTrack B: {alpha_b:.4g}\033[0m\n"
+                )
+
+            if "Random Forest" in fitted_a:
+                n_a = fitted_a["Random Forest"].n_estimators
+                n_b = fitted_b["Random Forest"].n_estimators
+                print(f"Optimal n_estimators — Track A: {n_a},  Track B: {n_b}", file=f)
+                sys.__stdout__.write(
+                    f"  Optimal n_estimators — \033[34mTrack A: {n_a}\033[0m,"
+                    f"  \033[32mTrack B: {n_b}\033[0m\n"
+                )
 
             # 4. Modeling & Visualisation
             print_header("4. Model Evaluation & Visualisation", file=f)
 
-            # LR CV RMSE on training set — same metric as the DT curve, so the
-            # baseline sits on a comparable scale
-            lr_rmse_a = cv_rmse_lr(X_ta, y_ta)
-            lr_rmse_b = cv_rmse_lr(X_tb, y_tb)
+            # LR baseline — needed for DT, RF, and Lasso tuning curves
+            needs_lr_baseline = any(k in hist_a for k in ("DT", "RF", "Lasso"))
+            lr_rmse_a = cv_rmse_lr(X_ta, y_ta) if needs_lr_baseline else None
+            lr_rmse_b = cv_rmse_lr(X_tb, y_tb) if needs_lr_baseline else None
 
-            # DT tuning curve — CV RMSE vs tree depth
-            plot_tuning_curve(hist_dt_a, hist_dt_b, out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b)
+            # Tuning curves — only drawn when the corresponding tuning was performed
+            if "DT" in hist_a:
+                plot_tuning_curve(hist_a["DT"], hist_b["DT"],
+                                  out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b)
 
-            # RF tuning curve — CV RMSE vs n_estimators
-            plot_tuning_curve(
-                hist_rf_a, hist_rf_b, out_dir / "RF_tuning.png", lr_rmse_a, lr_rmse_b,
-                x_key="n_estimators", x_label="Number of Trees",
-                suptitle="CV RMSE vs. Number of Trees  (10-fold CV)"
-            )
+            if "RF" in hist_a:
+                plot_tuning_curve(hist_a["RF"], hist_b["RF"],
+                                  out_dir / "RF_tuning.png", lr_rmse_a, lr_rmse_b,
+                                  x_key="n_estimators", x_label="Number of Trees",
+                                  suptitle="CV RMSE vs. Number of Trees  (10-fold CV)")
 
-            # Actual vs. predicted — one side-by-side figure per model
-            for name in ["Null Model", "Linear Regression", "DT (Depth 3)", "DT (Unconstrained)", "DT (Optimal)", "Random Forest"]:
+            if "Lasso" in hist_a:
+                # Use the existing lr_rmse_a and lr_rmse_b variables
+                plot_lasso_tuning_curve(hist_a["Lasso"], hist_b["Lasso"],
+                                        out_dir / "Lasso_tuning.png",
+                                        lr_rmse_a=lr_rmse_a, lr_rmse_b=lr_rmse_b)
+
+            # Actual vs. predicted — one side-by-side figure per fitted model
+            for name in [m for m in model_list if m in preds_a]:
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_actual_vs_predicted(
                     y_va, preds_a[name], y_vb, preds_b[name],
                     name, out_dir / f"{clean}_actual_vs_pred.png"
                 )
 
-            # Residuals vs. predicted — LR, DT (Optimal), and RF
-            for name in ["Linear Regression", "DT (Optimal)", "Random Forest"]:
+            # Residuals — drawn for fitted models among the standard candidates
+            for name in [m for m in ["Linear Regression", "Lasso", "DT (Optimal)", "Random Forest"]
+                         if m in preds_a]:
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_residuals(
                     y_va, preds_a[name], y_vb, preds_b[name],
                     name, out_dir / f"{clean}_residuals.png"
                 )
 
-            # Feature importance — DT (Optimal)
-            plot_feature_importance(
-                opt_dt_a, opt_dt_b, X_ta.columns, X_tb.columns,
-                out_dir / "DT_feature_importance.png"
-            )
+            # Feature importances — only when the relevant model was fitted
+            if "DT (Optimal)" in fitted_a:
+                plot_feature_importance(
+                    fitted_a["DT (Optimal)"], fitted_b["DT (Optimal)"],
+                    X_ta.columns, X_tb.columns,
+                    out_dir / "DT_feature_importance.png"
+                )
 
-            # Feature importance — Random Forest (more stable; averaged across all trees)
-            plot_feature_importance(
-                opt_rf_a, opt_rf_b, X_ta.columns, X_tb.columns,
-                out_dir / "RF_feature_importance.png",
-                model_name="Random Forest"
-            )
+            if "Lasso" in fitted_a:
+                plot_lasso_coefficients(
+                    fitted_a["Lasso"], fitted_b["Lasso"],
+                    X_ta.columns, X_tb.columns,
+                    out_dir / "Lasso_coefficients.png"
+                )
+
+            if "Random Forest" in fitted_a:
+                plot_feature_importance(
+                    fitted_a["Random Forest"], fitted_b["Random Forest"],
+                    X_ta.columns, X_tb.columns,
+                    out_dir / "RF_feature_importance.png",
+                    model_name="Random Forest"
+                )
 
             # 5. Final Comparison Table
             summary_df = create_summary_table(results_a, results_b)
             print("\nFinal Model Comparison (Strict 80/20 Test Evaluation):", file=f)
             print(summary_df.to_string(index=False), file=f)
 
-        print(f"Done: {filename} → {out_dir}/")
+        print(f"Done: {filename} -> {out_dir}/")
 
 if __name__ == "__main__":
-    main()
+    main() 
