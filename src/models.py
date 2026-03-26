@@ -1,10 +1,10 @@
 """
-    Factory functions for the null model, linear regression,
+    Factory functions for the null model, linear regression, Lasso,
     decision tree regressor, and random forest regressor.
 """
 import numpy as np
 from sklearn.model_selection import KFold, cross_val_score
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.dummy import DummyRegressor
@@ -87,6 +87,54 @@ def tune_random_forest(X_train, y_train, n_estimators_list):
     lower_arr = rmse_arr - std_arr
     best_n = next(h['n_estimators'] for h, lb in zip(history, lower_arr) if lb <= min_rmse)
     return best_n, history
+
+
+def tune_lasso(X_train, y_train, alphas):
+    """
+    Finds the optimal Lasso regularisation strength (alpha) via 10-fold CV on
+    the 80% training set only, applying the one-standard-error rule: select the
+    LARGEST alpha (most regularised / most parsimonious model) whose lower ±1 s.d.
+    bound still lies within one SE of the minimum CV RMSE.
+
+    Parameters
+    ----------
+    X_train : Training feature matrix (80%).
+    y_train : Training response vector.
+    alphas  : Sequence of positive alpha values to evaluate (e.g. log-spaced).
+
+    Returns
+    -------
+    best_alpha : Largest alpha within 1 SE of the minimum CV RMSE.
+    history    : List of {"alpha", "rmse", "std"} dicts (one per candidate).
+    """
+    kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+    history = []
+
+    for alpha in alphas:
+        scores = cross_val_score(
+            Lasso(alpha=alpha, max_iter=10_000),
+            X_train, y_train,
+            cv=kf, scoring='neg_root_mean_squared_error'
+        )
+        history.append({
+            "alpha": float(alpha),
+            "rmse":  float(-np.mean(scores)),
+            "std":   float(np.std(-scores)),
+        })
+
+    # 1-SE rule for Lasso: prefer the LARGEST alpha (most regularised) whose
+    # lower ±1 s.d. bound touches the minimum RMSE. Scan history in reverse so
+    # the first qualifying match is the largest qualifying alpha.
+    rmse_arr  = np.array([h['rmse'] for h in history])
+    std_arr   = np.array([h['std']  for h in history])
+    min_rmse  = float(rmse_arr[int(np.argmin(rmse_arr))])
+    lower_arr = rmse_arr - std_arr
+    best_alpha = next(
+        h['alpha']
+        for h, lb in zip(reversed(history), lower_arr[::-1])
+        if lb <= min_rmse
+    )
+    return best_alpha, history
 
 
 def get_metrics_and_preds(X_train, y_train, X_test, y_test, model):
