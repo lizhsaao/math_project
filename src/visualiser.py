@@ -50,28 +50,31 @@ def plot_exam_score_distribution(df, target, output_path):
     _save(fig, output_path)
 
 
-def plot_correlation_with_target(df_a, df_b, target, output_path):
+def plot_correlation_with_target(df_a, df_b, target, output_path, single_track=False):
     """
-    Side-by-side horizontal bar charts of Pearson correlations between each
-    numerical predictor and the target variable, for Track A and Track B.
+    Horizontal bar charts of Pearson correlations between each numerical
+    predictor and the target variable. Side-by-side for two tracks; single
+    panel when single_track=True.
 
     Parameters
     ----------
-    df_a, df_b  : DataFrames for Track A (imputed) and Track B (dropped).
-    target      : Name of the target/response variable column.
-    output_path : File path to save the figure.
+    df_a, df_b   : DataFrames for Track A (imputed) and Track B (dropped).
+    target       : Name of the target/response variable column.
+    output_path  : File path to save the figure.
+    single_track : If True, renders one panel (Track A data only).
     """
     corr_a = df_a.corr(numeric_only=True)[target].drop(target).sort_values()
     corr_b = df_b.corr(numeric_only=True)[target].drop(target).sort_values()
 
-    fig, axes = subplots(1, 2, figsize=(12, 4))
+    if single_track:
+        fig, ax = subplots(1, 1, figsize=(7, 4))
+        _tracks = [(ax, corr_a, _COL_A, "All Data")]
+    else:
+        fig, axes = subplots(1, 2, figsize=(12, 4))
+        _tracks = list(zip(axes, [corr_a, corr_b], [_COL_A, _COL_B],
+                           ["Track A (Imputed)", "Track B (Dropped)"]))
 
-    for ax, corr, col, title in zip(
-        axes,
-        [corr_a, corr_b],
-        [_COL_A, _COL_B],
-        ["Track A (Imputed)", "Track B (Dropped)"],
-    ):
+    for ax, corr, col, title in _tracks:
         ax.barh(corr.index, corr.values, color=col, alpha=0.85)
         ax.axvline(0, color="black", linewidth=0.8)
         ax.set_title(title, fontsize=12)
@@ -84,9 +87,11 @@ def plot_correlation_with_target(df_a, df_b, target, output_path):
     _save(fig, output_path)
 
 
-def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path):
+def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path,
+                             single_track=False):
     """
-    Side-by-side actual vs. predicted scatter plots for Track A and Track B.
+    Actual vs. predicted scatter plots. Side-by-side for two tracks; single
+    panel when single_track=True.
 
     Parameters
     ----------
@@ -94,16 +99,17 @@ def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name,
     y_true_b, y_pred_b : True and predicted values for Track B.
     model_name         : Model label used in the figure title.
     output_path        : File path to save the figure.
+    single_track       : If True, renders one panel (Track A data only).
     """
-    fig, axes = subplots(1, 2, figsize=(12, 5), sharey=True)
+    if single_track:
+        fig, ax = subplots(1, 1, figsize=(6, 5))
+        _tracks = [(ax, y_true_a, y_pred_a, _COL_A, "All Data")]
+    else:
+        fig, axes = subplots(1, 2, figsize=(12, 5), sharey=True)
+        _tracks = list(zip(axes, [y_true_a, y_true_b], [y_pred_a, y_pred_b],
+                           [_COL_A, _COL_B], ["Track A (Imputed)", "Track B (Dropped)"]))
 
-    for ax, y_true, y_pred, col, title in zip(
-        axes,
-        [y_true_a, y_true_b],
-        [y_pred_a, y_pred_b],
-        [_COL_A, _COL_B],
-        ["Track A (Imputed)", "Track B (Dropped)"],
-    ):
+    for ax, y_true, y_pred, col, title in _tracks:
         ax.scatter(y_true, y_pred, color=col, alpha=0.4, s=14, edgecolors="none")
         lo = min(y_true.min(), y_pred.min()) - 0.5
         hi = max(y_true.max(), y_pred.max()) + 0.5
@@ -124,10 +130,10 @@ def plot_tuning_curve(history_a, history_b, output_path,
                       lr_rmse_a=None, lr_rmse_b=None,
                       x_key="depth", x_label="Tree Depth",
                       suptitle="CV RMSE vs. Tree Depth  (10-fold CV)",
-                      n_folds=10):
+                      n_folds=10, single_track=False):
     """
-    Side-by-side CV RMSE tuning curve with ±1 s.d. band, 1-SE threshold line,
-    and optional LR baseline. Works for any hyperparameter scan.
+    CV RMSE tuning curve with ±1 s.d. band, 1-SE threshold line, and optional
+    LR baseline. Side-by-side for two tracks; single panel when single_track=True.
 
     Parameters
     ----------
@@ -138,16 +144,17 @@ def plot_tuning_curve(history_a, history_b, output_path,
     x_label              : x-axis label string (default "Tree Depth").
     suptitle             : Figure-level title (default matches DT depth scan).
     n_folds              : Number of CV folds used; needed to compute SE (default 10).
+    single_track         : If True, renders one panel (Track A data only).
     """
-    fig, axes = subplots(1, 2, figsize=(13, 5), sharey=True)
+    if single_track:
+        fig, ax = subplots(1, 1, figsize=(7, 5))
+        _tracks = [(ax, history_a, _COL_A, lr_rmse_a, "All Data")]
+    else:
+        fig, axes = subplots(1, 2, figsize=(13, 5), sharey=True)
+        _tracks = list(zip(axes, [history_a, history_b], [_COL_A, _COL_B],
+                           [lr_rmse_a, lr_rmse_b], ["Track A (Imputed)", "Track B (Dropped)"]))
 
-    for ax, history, col, lr_rmse, title in zip(
-        axes,
-        [history_a, history_b],
-        [_COL_A, _COL_B],
-        [lr_rmse_a, lr_rmse_b],
-        ["Track A (Imputed)", "Track B (Dropped)"],
-    ):
+    for ax, history, col, lr_rmse, title in _tracks:
         df       = pd.DataFrame(history)
         x_vals   = df[x_key].values
         rmse_arr = df["rmse"].values
@@ -191,9 +198,11 @@ def plot_tuning_curve(history_a, history_b, output_path,
     _save(fig, output_path)
 
 
-def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path):
+def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path,
+                   single_track=False):
     """
-    Side-by-side residuals vs. predicted plots for Track A and Track B.
+    Residuals vs. predicted scatter plots. Side-by-side for two tracks; single
+    panel when single_track=True.
 
     Parameters
     ----------
@@ -201,16 +210,17 @@ def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_pa
     y_true_b, y_pred_b : True and predicted values for Track B.
     model_name         : Model label used in the figure title.
     output_path        : File path to save the figure.
+    single_track       : If True, renders one panel (Track A data only).
     """
-    fig, axes = subplots(1, 2, figsize=(12, 4), sharey=True)
+    if single_track:
+        fig, ax = subplots(1, 1, figsize=(7, 4))
+        _tracks = [(ax, y_true_a, y_pred_a, _COL_A, "All Data")]
+    else:
+        fig, axes = subplots(1, 2, figsize=(12, 4), sharey=True)
+        _tracks = list(zip(axes, [y_true_a, y_true_b], [y_pred_a, y_pred_b],
+                           [_COL_A, _COL_B], ["Track A (Imputed)", "Track B (Dropped)"]))
 
-    for ax, y_true, y_pred, col, title in zip(
-        axes,
-        [y_true_a, y_true_b],
-        [y_pred_a, y_pred_b],
-        [_COL_A, _COL_B],
-        ["Track A (Imputed)", "Track B (Dropped)"],
-    ):
+    for ax, y_true, y_pred, col, title in _tracks:
         resid = y_true.values - y_pred
         ax.scatter(y_pred, resid, color=col, alpha=0.4, s=14, edgecolors="none")
         ax.axhline(0, linestyle=":", color=_COL_REF, linewidth=1.5)
@@ -226,9 +236,10 @@ def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_pa
 
 
 def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output_path,
-                            model_name="DT (Optimal)"):
+                            model_name="DT (Optimal)", single_track=False):
     """
-    Side-by-side horizontal bar charts of the top 10 feature importances.
+    Horizontal bar charts of the top 10 feature importances. Side-by-side for
+    two tracks; single panel when single_track=True.
 
     Parameters
     ----------
@@ -236,16 +247,17 @@ def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output
     feat_names_a, feat_names_b : Column names from each track's training matrix.
     output_path                : File path to save the figure.
     model_name                 : Model label used in the figure title (default "DT (Optimal)").
+    single_track               : If True, renders one panel (Track A data only).
     """
-    fig, axes = subplots(1, 2, figsize=(14, 6))
+    if single_track:
+        fig, ax = subplots(1, 1, figsize=(8, 6))
+        _tracks = [(ax, model_a, feat_names_a, _COL_A, "All Data")]
+    else:
+        fig, axes = subplots(1, 2, figsize=(14, 6))
+        _tracks = list(zip(axes, [model_a, model_b], [feat_names_a, feat_names_b],
+                           [_COL_A, _COL_B], ["Track A (Imputed)", "Track B (Dropped)"]))
 
-    for ax, model, names, col, title in zip(
-        axes,
-        [model_a, model_b],
-        [feat_names_a, feat_names_b],
-        [_COL_A, _COL_B],
-        ["Track A (Imputed)", "Track B (Dropped)"],
-    ):
+    for ax, model, names, col, title in _tracks:
         importances = pd.Series(model.feature_importances_, index=names)
         top10 = importances.sort_values(ascending=True).tail(10)
 
@@ -262,10 +274,11 @@ def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output
 
 
 def plot_lasso_tuning_curve(history_a, history_b, output_path,
-                            lr_rmse_a=None, lr_rmse_b=None, n_folds=10):
+                            lr_rmse_a=None, lr_rmse_b=None, n_folds=10,
+                            single_track=False):
     """
-    Side-by-side CV RMSE vs. Lasso alpha on a log x-axis, with ±1 s.d. band and
-    1-SE selection line (rightmost crossing: largest parsimonious alpha).
+    CV RMSE vs. Lasso alpha on a log x-axis with ±1 s.d. band and 1-SE selection
+    line. Side-by-side for two tracks; single panel when single_track=True.
 
     Parameters
     ----------
@@ -273,16 +286,17 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
     output_path          : File path to save the figure.
     lr_rmse_a, lr_rmse_b : Optional LR CV RMSE reference lines (one per track).
     n_folds              : Number of CV folds used (default 10).
+    single_track         : If True, renders one panel (Track A data only).
     """
-    fig, axes = subplots(1, 2, figsize=(13, 5), sharey=True)
+    if single_track:
+        fig, ax = subplots(1, 1, figsize=(7, 5))
+        _tracks = [(ax, history_a, _COL_A, lr_rmse_a, "All Data")]
+    else:
+        fig, axes = subplots(1, 2, figsize=(13, 5), sharey=True)
+        _tracks = list(zip(axes, [history_a, history_b], [_COL_A, _COL_B],
+                           [lr_rmse_a, lr_rmse_b], ["Track A (Imputed)", "Track B (Dropped)"]))
 
-    for ax, history, col, lr_rmse, title in zip(
-        axes,
-        [history_a, history_b],
-        [_COL_A, _COL_B],
-        [lr_rmse_a, lr_rmse_b],
-        ["Track A (Imputed)", "Track B (Dropped)"],
-    ):
+    for ax, history, col, lr_rmse, title in _tracks:
         df       = pd.DataFrame(history)
         x_vals   = df["alpha"].values
         rmse_arr = df["rmse"].values
@@ -333,26 +347,28 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
     _save(fig, output_path)
 
 
-def plot_lasso_coefficients(model_a, model_b, feat_names_a, feat_names_b, output_path):
+def plot_lasso_coefficients(model_a, model_b, feat_names_a, feat_names_b, output_path,
+                            single_track=False):
     """
-    Side-by-side horizontal bar charts of Lasso coefficients for both tracks.
-    Only non-zero coefficients are shown; positive values are drawn in steelblue,
-    negative values in coral, with a zero-reference line.
+    Horizontal bar charts of Lasso coefficients (non-zero only). Side-by-side
+    for two tracks; single panel when single_track=True.
 
     Parameters
     ----------
     model_a, model_b           : Fitted Lasso estimators with a .coef_ attribute.
     feat_names_a, feat_names_b : Column names from each track's training matrix.
     output_path                : File path to save the figure.
+    single_track               : If True, renders one panel (Track A data only).
     """
-    fig, axes = subplots(1, 2, figsize=(14, 6))
+    if single_track:
+        fig, ax = subplots(1, 1, figsize=(8, 6))
+        _tracks = [(ax, model_a, feat_names_a, "All Data")]
+    else:
+        fig, axes = subplots(1, 2, figsize=(14, 6))
+        _tracks = list(zip(axes, [model_a, model_b], [feat_names_a, feat_names_b],
+                           ["Track A (Imputed)", "Track B (Dropped)"]))
 
-    for ax, model, names, title in zip(
-        axes,
-        [model_a, model_b],
-        [feat_names_a, feat_names_b],
-        ["Track A (Imputed)", "Track B (Dropped)"],
-    ):
+    for ax, model, names, title in _tracks:
         coefs = pd.Series(model.coef_, index=names)
         non_zero = coefs[coefs != 0].sort_values()
 

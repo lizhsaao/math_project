@@ -103,6 +103,12 @@ def main(models=None, datasets=None):
             df_raw, df_clean, df_imp, df_drop = load_and_clean(
                 data_path, cfg['target'], cfg['missing_cols'], cfg['limits']
             )
+
+            # Detect single-track mode early so EDA plots can use it.
+            # When no rows were dropped (no missing values), both tracks are
+            # identical — run only one.
+            single_track = df_imp.shape[0] == df_drop.shape[0]
+
             # Tee stdout -> terminal + report file so inspection output is visible
             old_stdout = sys.stdout
             sys.stdout = Tee(sys.__stdout__, f)
@@ -111,18 +117,22 @@ def main(models=None, datasets=None):
 
             # EDA plots
             plot_exam_score_distribution(df_clean, cfg['target'], out_dir / "score_distribution.png")
-            plot_correlation_with_target(df_imp, df_drop, cfg['target'], out_dir / "correlation.png")
+            plot_correlation_with_target(df_imp, df_drop, cfg['target'], out_dir / "correlation.png",
+                                         single_track=single_track)
 
             # 2. Summary
             print_header("2. Summary", file=f)
             print(f"Cleaned Base: {df_clean.shape[0]} rows", file=f)
             print(f"Track A (Imputed): {df_imp.shape[0]} rows", file=f)
             print(f"Track B (Dropped): {df_drop.shape[0]} rows", file=f)
+            if single_track:
+                print("No missing values — single-track mode (Track A only).", file=f)
 
             # 3. Preprocessing & Encoding
             print_header("3. Preprocessing & Encoding", file=f)
             X_ta, X_va, y_ta, y_va = preprocess_track(df_imp,  requires_imputation=True,  target=cfg['target'])
-            X_tb, X_vb, y_tb, y_vb = preprocess_track(df_drop, requires_imputation=False, target=cfg['target'])
+            if not single_track:
+                X_tb, X_vb, y_tb, y_vb = preprocess_track(df_drop, requires_imputation=False, target=cfg['target'])
 
             def run_track(X_tr, X_te, y_tr, y_te, track_label):
                 """
@@ -179,9 +189,13 @@ def main(models=None, datasets=None):
                 print("\n", file=f)
                 return results, preds, histories, fitted
 
-            # Run both tracks before plotting so side-by-side figures can be produced
+            # Run tracks — skip Track B entirely when data are identical
             results_a, preds_a, hist_a, fitted_a = run_track(X_ta, X_va, y_ta, y_va, "Track A")
-            results_b, preds_b, hist_b, fitted_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
+            if single_track:
+                results_b, preds_b, hist_b, fitted_b = results_a, preds_a, hist_a, fitted_a
+                X_tb, X_vb, y_tb, y_vb = X_ta, X_va, y_ta, y_va
+            else:
+                results_b, preds_b, hist_b, fitted_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
 
             print(f"Final Feature Count: {X_ta.shape[1]}", file=f)
 
@@ -219,31 +233,34 @@ def main(models=None, datasets=None):
             # LR baseline — needed for DT, RF, and Lasso tuning curves
             needs_lr_baseline = any(k in hist_a for k in ("DT", "RF", "Lasso"))
             lr_rmse_a = cv_rmse_lr(X_ta, y_ta) if needs_lr_baseline else None
-            lr_rmse_b = cv_rmse_lr(X_tb, y_tb) if needs_lr_baseline else None
+            lr_rmse_b = cv_rmse_lr(X_tb, y_tb) if (needs_lr_baseline and not single_track) else None
 
             # Tuning curves — only drawn when the corresponding tuning was performed
             if "DT" in hist_a:
                 plot_tuning_curve(hist_a["DT"], hist_b["DT"],
-                                  out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b)
+                                  out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b,
+                                  single_track=single_track)
 
             if "RF" in hist_a:
                 plot_tuning_curve(hist_a["RF"], hist_b["RF"],
                                   out_dir / "RF_tuning.png", lr_rmse_a, lr_rmse_b,
                                   x_key="n_estimators", x_label="Number of Trees",
-                                  suptitle="CV RMSE vs. Number of Trees  (10-fold CV)")
+                                  suptitle="CV RMSE vs. Number of Trees  (10-fold CV)",
+                                  single_track=single_track)
 
             if "Lasso" in hist_a:
-                # Use the existing lr_rmse_a and lr_rmse_b variables
                 plot_lasso_tuning_curve(hist_a["Lasso"], hist_b["Lasso"],
                                         out_dir / "Lasso_tuning.png",
-                                        lr_rmse_a=lr_rmse_a, lr_rmse_b=lr_rmse_b)
+                                        lr_rmse_a=lr_rmse_a, lr_rmse_b=lr_rmse_b,
+                                        single_track=single_track)
 
-            # Actual vs. predicted — one side-by-side figure per fitted model
+            # Actual vs. predicted — one figure per fitted model
             for name in [m for m in model_list if m in preds_a]:
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_actual_vs_predicted(
                     y_va, preds_a[name], y_vb, preds_b[name],
-                    name, out_dir / f"{clean}_actual_vs_pred.png"
+                    name, out_dir / f"{clean}_actual_vs_pred.png",
+                    single_track=single_track
                 )
 
             # Residuals — drawn for fitted models among the standard candidates
@@ -252,7 +269,8 @@ def main(models=None, datasets=None):
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_residuals(
                     y_va, preds_a[name], y_vb, preds_b[name],
-                    name, out_dir / f"{clean}_residuals.png"
+                    name, out_dir / f"{clean}_residuals.png",
+                    single_track=single_track
                 )
 
             # Feature importances — only when the relevant model was fitted
@@ -260,14 +278,16 @@ def main(models=None, datasets=None):
                 plot_feature_importance(
                     fitted_a["DT (Optimal)"], fitted_b["DT (Optimal)"],
                     X_ta.columns, X_tb.columns,
-                    out_dir / "DT_feature_importance.png"
+                    out_dir / "DT_feature_importance.png",
+                    single_track=single_track
                 )
 
             if "Lasso" in fitted_a:
                 plot_lasso_coefficients(
                     fitted_a["Lasso"], fitted_b["Lasso"],
                     X_ta.columns, X_tb.columns,
-                    out_dir / "Lasso_coefficients.png"
+                    out_dir / "Lasso_coefficients.png",
+                    single_track=single_track
                 )
 
             if "Random Forest" in fitted_a:
@@ -275,7 +295,7 @@ def main(models=None, datasets=None):
                     fitted_a["Random Forest"], fitted_b["Random Forest"],
                     X_ta.columns, X_tb.columns,
                     out_dir / "RF_feature_importance.png",
-                    model_name="Random Forest"
+                    model_name="Random Forest", single_track=single_track
                 )
 
             # 5. Final Comparison Table
