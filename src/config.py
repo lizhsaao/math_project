@@ -31,7 +31,16 @@ DATASET_CONFIGS = {
             "Tutoring_Sessions": (60, "Tutoring > 60 sessions/month")
         }
     },
-    
+    "Housing.csv": { 
+        "target": "price",
+        "missing_cols": [], 
+        "limits": {
+            "bedrooms": (10, "Bedrooms > 10"),   # Flags rare mansions/errors
+            "bathrooms": (10, "Bathrooms > 10"), 
+            "stories": (5, "Stories > 5"),
+            "area": (20000, "Area > 20,000 sqft") # Flag massive estates
+        }
+    }     
 }
 
 # Global ML Hyperparameters

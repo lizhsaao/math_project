@@ -49,18 +49,22 @@ def print_header(text, file=None):
     output = f"\n{'=' * WIDTH}\n{text.center(WIDTH, '=')}\n{'=' * WIDTH}\n"
     print(output, file=file or sys.stdout)
 
-def main(models=None):
+def main(models=None, datasets=None):
     """
-    Runs the modelling pipeline for every dataset listed in DATASET_CONFIGS.
+    Runs the modelling pipeline for datasets listed in DATASET_CONFIGS.
 
     Parameters
     ----------
-    models : Which models to fit and evaluate.
-             - None (default): all models in ALL_MODELS.
-             - str: a single model name, e.g. "Random Forest".
-             - list[str]: an explicit ordered subset, e.g. ["Linear Regression", "Lasso"].
-             Only the requested models are tuned, fitted, and plotted, so omitting
-             slow models (e.g. "Random Forest") speeds up the run significantly.
+    models   : Which models to fit and evaluate.
+               - None (default): all models in ALL_MODELS.
+               - str: a single model name, e.g. "Random Forest".
+               - list[str]: an explicit ordered subset, e.g. ["Linear Regression", "Lasso"].
+               Only the requested models are tuned, fitted, and plotted, so omitting
+               slow models (e.g. "Random Forest") speeds up the run significantly.
+    datasets : Which datasets (filenames) to process.
+               - None (default): all entries in DATASET_CONFIGS.
+               - str: a single filename, e.g. "Housing.csv".
+               - list[str]: an explicit subset, e.g. ["Housing.csv"].
     """
     # Resolve models parameter to an ordered list
     if models is None:
@@ -70,7 +74,17 @@ def main(models=None):
     else:
         model_list = list(models)
 
+    # Resolve datasets parameter to a set for O(1) lookup
+    if datasets is None:
+        dataset_set = set(DATASET_CONFIGS.keys())
+    elif isinstance(datasets, str):
+        dataset_set = {datasets}
+    else:
+        dataset_set = set(datasets)
+
     for filename, cfg in DATASET_CONFIGS.items():
+        if filename not in dataset_set:
+            continue
         data_path = DATA_DIR / filename
         if not data_path.exists():
             print(f"Skipping {filename}: File not found.")
@@ -272,4 +286,4 @@ def main(models=None):
         print(f"Done: {filename} -> {out_dir}/")
 
 if __name__ == "__main__":
-    main() 
+    main(datasets="Housing.csv")
