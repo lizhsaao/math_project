@@ -2,6 +2,7 @@
     Central configuration: file paths, dataset-specific cleaning rules,
     and global ML hyperparameters.
 """
+import numpy as np
 from pathlib import Path
 
 WIDTH = 50
@@ -31,4 +32,5 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.2
 CV_FOLDS = 10
 DEPTHS = list(range(1, 21))
-N_ESTIMATORS = list(range(10, 310, 10))   # 10, 20, ..., 300 for RF tuning curve
+N_ESTIMATORS = list(range(10, 310, 10)) # 10, 20, ..., 300 for RF tuning curve
+LASSO_ALPHAS = list(np.logspace(-3, 2, 100)) # 0.001 -> 100 on log scale, 100 candidates
