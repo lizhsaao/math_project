@@ -55,9 +55,9 @@ No missing values — single-track mode (Track A only).
 
 
 Final Feature Count: 13
-Optimal DT depth — Track A: 2,  Track B: 2
-Optimal Lasso α  — Track A: 100,  Track B: 100
-Optimal n_estimators — Track A: 10,  Track B: 10
+Optimal DT depth — 2
+Optimal Lasso α  — 100
+Optimal n_estimators — 10
 
 ==================================================
 =======4. Model Evaluation & Visualisation========

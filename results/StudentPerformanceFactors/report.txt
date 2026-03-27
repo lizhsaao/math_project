@@ -11,13 +11,17 @@ Processing Dataset: StudentPerformanceFactors.csv=
 
 --- Data Integrity Inspection ---
   [PASS] Hours_Studied (Negative Check): 0 issues
+  [PASS] Studying > 168h/week: 0 issues
   [PASS] Attendance (Negative Check): 0 issues
   [PASS] Attendance > 100%: 0 issues
   [PASS] Sleep_Hours (Negative Check): 0 issues
-  [PASS] Sleep > 24h: 0 issues
+  [PASS] Sleep > 24h/night: 0 issues
   [PASS] Previous_Scores (Negative Check): 0 issues
+  [PASS] Previous Score > 100: 0 issues
   [PASS] Tutoring_Sessions (Negative Check): 0 issues
+  [PASS] Tutoring > 60 sessions/month: 0 issues
   [PASS] Physical_Activity (Negative Check): 0 issues
+  [PASS] Activity > 168h/week: 0 issues
   [PASS] Exam_Score (Negative Check): 0 issues
   [FAIL] Score > 100: 1 issues
 

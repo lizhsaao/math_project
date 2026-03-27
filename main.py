@@ -202,30 +202,42 @@ def main(models=None, datasets=None):
             # Optimal hyperparameters — plain text to report, ANSI colour to terminal
             if "DT (Optimal)" in fitted_a:
                 depth_a = fitted_a["DT (Optimal)"].max_depth
-                depth_b = fitted_b["DT (Optimal)"].max_depth
-                print(f"Optimal DT depth — Track A: {depth_a},  Track B: {depth_b}", file=f)
-                sys.__stdout__.write(
-                    f"  Optimal DT depth — \033[34mTrack A: {depth_a}\033[0m,"
-                    f"  \033[32mTrack B: {depth_b}\033[0m\n"
-                )
+                if single_track:
+                    print(f"Optimal DT depth — {depth_a}", file=f)
+                    sys.__stdout__.write(f"  Optimal DT depth — \033[34m{depth_a}\033[0m\n")
+                else:
+                    depth_b = fitted_b["DT (Optimal)"].max_depth
+                    print(f"Optimal DT depth — Track A: {depth_a},  Track B: {depth_b}", file=f)
+                    sys.__stdout__.write(
+                        f"  Optimal DT depth — \033[34mTrack A: {depth_a}\033[0m,"
+                        f"  \033[32mTrack B: {depth_b}\033[0m\n"
+                    )
 
             if "Lasso" in fitted_a:
                 alpha_a = fitted_a["Lasso"].alpha
-                alpha_b = fitted_b["Lasso"].alpha
-                print(f"Optimal Lasso α  — Track A: {alpha_a:.4g},  Track B: {alpha_b:.4g}", file=f)
-                sys.__stdout__.write(
-                    f"  Optimal Lasso α  — \033[34mTrack A: {alpha_a:.4g}\033[0m,"
-                    f"  \033[32mTrack B: {alpha_b:.4g}\033[0m\n"
-                )
+                if single_track:
+                    print(f"Optimal Lasso α  — {alpha_a:.4g}", file=f)
+                    sys.__stdout__.write(f"  Optimal Lasso α  — \033[34m{alpha_a:.4g}\033[0m\n")
+                else:
+                    alpha_b = fitted_b["Lasso"].alpha
+                    print(f"Optimal Lasso α  — Track A: {alpha_a:.4g},  Track B: {alpha_b:.4g}", file=f)
+                    sys.__stdout__.write(
+                        f"  Optimal Lasso α  — \033[34mTrack A: {alpha_a:.4g}\033[0m,"
+                        f"  \033[32mTrack B: {alpha_b:.4g}\033[0m\n"
+                    )
 
             if "Random Forest" in fitted_a:
                 n_a = fitted_a["Random Forest"].n_estimators
-                n_b = fitted_b["Random Forest"].n_estimators
-                print(f"Optimal n_estimators — Track A: {n_a},  Track B: {n_b}", file=f)
-                sys.__stdout__.write(
-                    f"  Optimal n_estimators — \033[34mTrack A: {n_a}\033[0m,"
-                    f"  \033[32mTrack B: {n_b}\033[0m\n"
-                )
+                if single_track:
+                    print(f"Optimal n_estimators — {n_a}", file=f)
+                    sys.__stdout__.write(f"  Optimal n_estimators — \033[34m{n_a}\033[0m\n")
+                else:
+                    n_b = fitted_b["Random Forest"].n_estimators
+                    print(f"Optimal n_estimators — Track A: {n_a},  Track B: {n_b}", file=f)
+                    sys.__stdout__.write(
+                        f"  Optimal n_estimators — \033[34mTrack A: {n_a}\033[0m,"
+                        f"  \033[32mTrack B: {n_b}\033[0m\n"
+                    )
 
             # 4. Modeling & Visualisation
             print_header("4. Model Evaluation & Visualisation", file=f)
@@ -306,4 +318,4 @@ def main(models=None, datasets=None):
         print(f"Done: {filename} -> {out_dir}/")
 
 if __name__ == "__main__":
-    main(datasets="Housing.csv")
+    main()
