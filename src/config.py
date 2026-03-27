@@ -38,22 +38,30 @@ DATASET_CONFIGS = {
             "area": (20000, "Area > 20,000 sqft")
         }
     },
-    "financial_regression.csv": {
-        "target": "gold_close",
+    "winequality-red.csv": {
+        "target": "quality",
         "limits": {
-            "gold_close": (5000, "Gold Price > 5000"),
-            "oil_close": (200, "Oil Price > 200"),
-            "silver_close": (100, "Silver Price > 100"),
-            "sp500_close": (10000, "S&P 500 > 10,000"),
-            "us_rates_%": (20, "Interest Rates > 20%")
+            # Target: Score is 0-10
+            "quality": (10, "Quality Score > 10"),
+            
+            # Predictor sanity checks based on chemical reality
+            "pH": (14, "pH > 14 (Impossible)"),
+            "alcohol": (20, "Alcohol > 20% (Likely Fortified/Error)"),
+            "residual_sugar": (45, "Sugar > 45g/L (Sweet/Outlier for Red)"),
+            "total_sulfur_dioxide": (300, "SO2 > 300ppm (Unlikely for table wine)")
         }
     }
 }
+
+# Columns with a missing-value rate above this threshold are dropped entirely
+# during load_and_clean (before Track A/B split). Keeps genuinely sparse
+# macro indicators (e.g. monthly CPI in a daily dataset) from destroying Track B.
+SPARSITY_THRESHOLD = 0.20   # 20 %
 
 # Global ML Hyperparameters
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
 CV_FOLDS = 10
 DEPTHS = list(range(1, 21))
-N_ESTIMATORS = list(range(10, 310, 10)) # 10, 20, ..., 300 for RF tuning curve
-LASSO_ALPHAS = list(np.logspace(-3, 2, 100)) # 0.001 -> 100 on log scale, 100 candidates
+N_ESTIMATORS = list(range(10, 210, 20)) # 10, 30, ..., 190 — 10 candidates (was 30)
+LASSO_ALPHAS = list(np.logspace(-3, 2, 50))  # 0.001 -> 100 on log scale, 50 candidates (was 100)
