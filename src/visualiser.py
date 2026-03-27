@@ -88,7 +88,7 @@ def plot_correlation_with_target(df_a, df_b, target, output_path, single_track=F
 
 
 def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path,
-                             single_track=False):
+                             single_track=False, target="value"):
     """
     Actual vs. predicted scatter plots. Side-by-side for two tracks; single
     panel when single_track=True.
@@ -100,6 +100,7 @@ def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name,
     model_name         : Model label used in the figure title.
     output_path        : File path to save the figure.
     single_track       : If True, renders one panel (Track A data only).
+    target             : Name of the response variable (used for axis labels).
     """
     if single_track:
         fig, ax = subplots(1, 1, figsize=(6, 5))
@@ -109,13 +110,14 @@ def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name,
         _tracks = list(zip(axes, [y_true_a, y_true_b], [y_pred_a, y_pred_b],
                            [_COL_A, _COL_B], ["Track A (Imputed)", "Track B (Dropped)"]))
 
+    _label = target.replace("_", " ")
     for ax, y_true, y_pred, col, title in _tracks:
         ax.scatter(y_true, y_pred, color=col, alpha=0.4, s=14, edgecolors="none")
         lo = min(y_true.min(), y_pred.min()) - 0.5
         hi = max(y_true.max(), y_pred.max()) + 0.5
         ax.plot([lo, hi], [lo, hi], "--", color=_COL_REF, linewidth=1.5, label="Ideal fit")
-        ax.set_xlabel("Actual Score")
-        ax.set_ylabel("Predicted Score")
+        ax.set_xlabel(f"Actual {_label}")
+        ax.set_ylabel(f"Predicted {_label}")
         ax.set_title(title, fontsize=12)
         ax.legend(fontsize=8)
         ax.spines["top"].set_visible(False)
@@ -199,7 +201,7 @@ def plot_tuning_curve(history_a, history_b, output_path,
 
 
 def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path,
-                   single_track=False):
+                   single_track=False, target="value"):
     """
     Residuals vs. predicted scatter plots. Side-by-side for two tracks; single
     panel when single_track=True.
@@ -211,6 +213,7 @@ def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_pa
     model_name         : Model label used in the figure title.
     output_path        : File path to save the figure.
     single_track       : If True, renders one panel (Track A data only).
+    target             : Name of the response variable (used for axis label).
     """
     if single_track:
         fig, ax = subplots(1, 1, figsize=(7, 4))
@@ -220,11 +223,12 @@ def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_pa
         _tracks = list(zip(axes, [y_true_a, y_true_b], [y_pred_a, y_pred_b],
                            [_COL_A, _COL_B], ["Track A (Imputed)", "Track B (Dropped)"]))
 
+    _label = target.replace("_", " ")
     for ax, y_true, y_pred, col, title in _tracks:
         resid = y_true.values - y_pred
         ax.scatter(y_pred, resid, color=col, alpha=0.4, s=14, edgecolors="none")
         ax.axhline(0, linestyle=":", color=_COL_REF, linewidth=1.5)
-        ax.set_xlabel("Predicted Score")
+        ax.set_xlabel(f"Predicted {_label}")
         ax.set_ylabel("Residual (Actual − Predicted)")
         ax.set_title(title, fontsize=12)
         ax.spines["top"].set_visible(False)

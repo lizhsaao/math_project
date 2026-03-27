@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import sys
-from src.config import WIDTH
+from src.config import WIDTH, SPARSITY_THRESHOLD
 
 def inspect_data(df, target, limits):
     """
@@ -33,11 +33,15 @@ def inspect_data(df, target, limits):
             print(f"  {status_up} {label}: {upper_count} issues")
 
     # 2. CATEGORICAL SCHEMA DISCOVERY
+    _MAX_DISPLAY = 20   # show individual values only up to this many unique entries
     print(f"\n--- Categorical Schema (Manual Review) ---")
     cat_cols = df.select_dtypes(include=['object', 'category']).columns
     for col in cat_cols:
         unique_vals = sorted(df[col].dropna().unique().astype(str))
-        print(f"  {col}: {', '.join(unique_vals)}")
+        if len(unique_vals) <= _MAX_DISPLAY:
+            print(f"  {col}: {', '.join(unique_vals)}")
+        else:
+            print(f"  {col}: [{len(unique_vals)} unique values — high cardinality, manual review recommended]")
     
     # --- MANUAL GATEKEEPER ---
     sys.__stdout__.write("\nConfirm categorical schema above (Y/N): ")
@@ -89,7 +93,23 @@ def load_and_clean(data_path, target, limits):
     else:
         df_cleaned = df_base.copy()
 
-    # Detect columns that contain at least one missing value
+    # Drop columns that are too sparse to be useful predictors.
+    # Columns above SPARSITY_THRESHOLD (e.g. monthly CPI in a daily dataset)
+    # would destroy Track B by eliminating nearly all rows in the listwise step.
+    predictor_cols = [c for c in df_cleaned.columns if c != target]
+    sparse_cols = [
+        c for c in predictor_cols
+        if df_cleaned[c].isna().mean() > SPARSITY_THRESHOLD
+    ]
+    if sparse_cols:
+        print(
+            f"  [INFO] Dropped {len(sparse_cols)} sparse column(s) "
+            f"(>{SPARSITY_THRESHOLD:.0%} missing): {sparse_cols}"
+        )
+        df_cleaned = df_cleaned.drop(columns=sparse_cols)
+
+    # Auto-detect columns that still contain at least one missing value —
+    # these define Track B (listwise deletion).
     missing_cols = [col for col in df_cleaned.columns if df_cleaned[col].isna().any()]
 
     df_dropped = df_cleaned.dropna(subset=missing_cols).copy() if missing_cols else df_cleaned.copy()

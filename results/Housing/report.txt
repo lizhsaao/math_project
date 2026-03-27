@@ -66,8 +66,8 @@ Final Model Comparison (Strict 80/20 Test Evaluation):
              Model         RMSE      R²
         Null Model 2268298.2282 -0.0179
  Linear Regression 1324506.9601  0.6529
-             Lasso 1324604.5708  0.6529
+             Lasso 1324556.3615  0.6529
       DT (Depth 3) 1775612.1814  0.3762
 DT (Unconstrained) 1625669.9043  0.4771
       DT (Optimal) 1783333.6470  0.3708
-     Random Forest 1365449.5015  0.6311
+     Random Forest 1363585.4857  0.6321

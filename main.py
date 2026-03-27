@@ -275,7 +275,7 @@ def main(models=None, datasets=None):
                 plot_actual_vs_predicted(
                     y_va, preds_a[name], y_vb, preds_b[name],
                     name, out_dir / f"{clean}_actual_vs_pred.png",
-                    single_track=single_track
+                    single_track=single_track, target=cfg['target']
                 )
 
             # Residuals — drawn for fitted models among the standard candidates
@@ -285,7 +285,7 @@ def main(models=None, datasets=None):
                 plot_residuals(
                     y_va, preds_a[name], y_vb, preds_b[name],
                     name, out_dir / f"{clean}_residuals.png",
-                    single_track=single_track
+                    single_track=single_track, target=cfg['target']
                 )
 
             # Feature importances — only when the relevant model was fitted
@@ -321,4 +321,5 @@ def main(models=None, datasets=None):
         print(f"Done: {filename} -> {out_dir}/")
 
 if __name__ == "__main__":
-    main("Gold_Price.csv")
+    # main(datasets = "winequality-red.csv")
+    main()

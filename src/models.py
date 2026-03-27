@@ -34,7 +34,8 @@ def tune_decision_tree(X_train, y_train, depths):
     for d in depths:
         scores = cross_val_score(
             DecisionTreeRegressor(max_depth=d, random_state=RANDOM_STATE),
-            X_train, y_train, cv=kf, scoring='neg_root_mean_squared_error'
+            X_train, y_train, cv=kf, scoring='neg_root_mean_squared_error',
+            n_jobs=-1
         )
         history.append({"depth": d, "rmse": float(-np.mean(scores)),
                         "std": float(np.std(-scores))})
@@ -114,7 +115,8 @@ def tune_lasso(X_train, y_train, alphas):
         scores = cross_val_score(
             Lasso(alpha=alpha, max_iter=10_000),
             X_train, y_train,
-            cv=kf, scoring='neg_root_mean_squared_error'
+            cv=kf, scoring='neg_root_mean_squared_error',
+            n_jobs=-1
         )
         history.append({
             "alpha": float(alpha),
@@ -183,6 +185,7 @@ def cv_rmse_lr(X_train, y_train):
     kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     scores = cross_val_score(
         LinearRegression(), X_train, y_train,
-        cv=kf, scoring='neg_root_mean_squared_error'
+        cv=kf, scoring='neg_root_mean_squared_error',
+        n_jobs=-1
     )
     return float(-np.mean(scores))

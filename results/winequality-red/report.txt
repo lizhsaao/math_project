@@ -1,0 +1,73 @@
+
+==================================================
+=====Processing Dataset: winequality-red.csv======
+==================================================
+
+
+==================================================
+================1. Load & Inspect=================
+==================================================
+
+
+--- Data Integrity Inspection ---
+  [PASS] fixed_acidity (Negative Check): 0 issues
+  [PASS] volatile_acidity (Negative Check): 0 issues
+  [PASS] citric_acid (Negative Check): 0 issues
+  [PASS] residual_sugar (Negative Check): 0 issues
+  [PASS] Sugar > 45g/L (Sweet/Outlier for Red): 0 issues
+  [PASS] chlorides (Negative Check): 0 issues
+  [PASS] free_sulfur_dioxide (Negative Check): 0 issues
+  [PASS] total_sulfur_dioxide (Negative Check): 0 issues
+  [PASS] SO2 > 300ppm (Unlikely for table wine): 0 issues
+  [PASS] density (Negative Check): 0 issues
+  [PASS] pH (Negative Check): 0 issues
+  [PASS] pH > 14 (Impossible): 0 issues
+  [PASS] sulphates (Negative Check): 0 issues
+  [PASS] alcohol (Negative Check): 0 issues
+  [PASS] Alcohol > 20% (Likely Fortified/Error): 0 issues
+  [PASS] quality (Negative Check): 0 issues
+  [PASS] Quality Score > 10: 0 issues
+
+--- Categorical Schema (Manual Review) ---
+Schema confirmed. Proceeding...
+
+
+==================================================
+====================2. Summary====================
+==================================================
+
+Cleaned Base: 1599 rows
+Rows: 1599 (no missing values — single-track mode)
+
+==================================================
+===========3. Preprocessing & Encoding============
+==================================================
+
+  Fitted Null Model
+  Fitted Linear Regression
+  Fitted Lasso
+  Fitted DT (Depth 3)
+  Fitted DT (Unconstrained)
+  Fitted DT (Optimal)
+  Fitted Random Forest
+
+
+Final Feature Count: 11
+Optimal DT depth — 2
+Optimal Lasso α  — 0.1099
+Optimal n_estimators — 10
+
+==================================================
+=======4. Model Evaluation & Visualisation========
+==================================================
+
+
+Final Model Comparison (Strict 80/20 Test Evaluation):
+             Model   RMSE      R²
+        Null Model 0.8107 -0.0056
+ Linear Regression 0.6245  0.4032
+             Lasso 0.6672  0.3188
+      DT (Depth 3) 0.6820  0.2882
+DT (Unconstrained) 0.7826  0.0627
+      DT (Optimal) 0.7088  0.2312
+     Random Forest 0.5676  0.5070
