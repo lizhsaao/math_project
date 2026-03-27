@@ -39,55 +39,5 @@ Processing Dataset: StudentPerformanceFactors.csv=
   Parental_Education_Level: College, High School, Postgraduate
   Distance_from_Home: Far, Moderate, Near
   Gender: Female, Male
-Schema confirmed. Proceeding...
 
-
-==================================================
-====================2. Summary====================
-==================================================
-
-Cleaned Base: 6606 rows
-Track A (Imputed): 6606 rows
-Track B (Dropped): 6377 rows
-
-==================================================
-===========3. Preprocessing & Encoding============
-==================================================
-
-  Track A: Fitted Null Model
-  Track A: Fitted Linear Regression
-  Track A: Fitted Lasso
-  Track A: Fitted DT (Depth 3)
-  Track A: Fitted DT (Unconstrained)
-  Track A: Fitted DT (Optimal)
-  Track A: Fitted Random Forest
-
-
-  Track B: Fitted Null Model
-  Track B: Fitted Linear Regression
-  Track B: Fitted Lasso
-  Track B: Fitted DT (Depth 3)
-  Track B: Fitted DT (Unconstrained)
-  Track B: Fitted DT (Optimal)
-  Track B: Fitted Random Forest
-
-
-Final Feature Count: 27
-Optimal DT depth — Track A: 3,  Track B: 2
-Optimal Lasso α  — Track A: 0.1668,  Track B: 0.1874
-Optimal n_estimators — Track A: 10,  Track B: 10
-
-==================================================
-=======4. Model Evaluation & Visualisation========
-==================================================
-
-
-Final Model Comparison (Strict 80/20 Test Evaluation):
-             Model Track A (RMSE) Track A R² Track B (RMSE) Track B R²
-        Null Model         3.6401    -0.0020         3.9566    -0.0001
- Linear Regression         1.5213     0.8250         2.0410     0.7339
-             Lasso         1.9973     0.6983         2.4611     0.6130
-      DT (Depth 3)         2.5644     0.5027         3.0075     0.4222
-DT (Unconstrained)         3.6741    -0.0208         3.6533     0.1474
-      DT (Optimal)         2.5644     0.5027         3.1437     0.3687
-     Random Forest         2.1877     0.6381         2.5287     0.5915
+[TERMINATED] Analysis halted for manual data review.

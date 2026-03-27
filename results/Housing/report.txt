@@ -37,21 +37,19 @@ Schema confirmed. Proceeding...
 ==================================================
 
 Cleaned Base: 545 rows
-Track A (Imputed): 545 rows
-Track B (Dropped): 545 rows
-No missing values — single-track mode (Track A only).
+Rows: 545 (no missing values — single-track mode)
 
 ==================================================
 ===========3. Preprocessing & Encoding============
 ==================================================
 
-  Track A: Fitted Null Model
-  Track A: Fitted Linear Regression
-  Track A: Fitted Lasso
-  Track A: Fitted DT (Depth 3)
-  Track A: Fitted DT (Unconstrained)
-  Track A: Fitted DT (Optimal)
-  Track A: Fitted Random Forest
+  Fitted Null Model
+  Fitted Linear Regression
+  Fitted Lasso
+  Fitted DT (Depth 3)
+  Fitted DT (Unconstrained)
+  Fitted DT (Optimal)
+  Fitted Random Forest
 
 
 Final Feature Count: 13
@@ -65,11 +63,11 @@ Optimal n_estimators — 10
 
 
 Final Model Comparison (Strict 80/20 Test Evaluation):
-             Model Track A (RMSE) Track A R² Track B (RMSE) Track B R²
-        Null Model   2268298.2282    -0.0179   2268298.2282    -0.0179
- Linear Regression   1324506.9601     0.6529   1324506.9601     0.6529
-             Lasso   1324604.5708     0.6529   1324604.5708     0.6529
-      DT (Depth 3)   1775612.1814     0.3762   1775612.1814     0.3762
-DT (Unconstrained)   1625669.9043     0.4771   1625669.9043     0.4771
-      DT (Optimal)   1783333.6470     0.3708   1783333.6470     0.3708
-     Random Forest   1365449.5015     0.6311   1365449.5015     0.6311
+             Model         RMSE      R²
+        Null Model 2268298.2282 -0.0179
+ Linear Regression 1324506.9601  0.6529
+             Lasso 1324604.5708  0.6529
+      DT (Depth 3) 1775612.1814  0.3762
+DT (Unconstrained) 1625669.9043  0.4771
+      DT (Optimal) 1783333.6470  0.3708
+     Random Forest 1365449.5015  0.6311
