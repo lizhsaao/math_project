@@ -101,7 +101,7 @@ def main(models=None, datasets=None):
             # 1. Load & Inspect
             print_header("1. Load & Inspect", file=f)
             df_raw, df_clean, df_imp, df_drop = load_and_clean(
-                data_path, cfg['target'], cfg['missing_cols'], cfg['limits']
+                data_path, cfg['target'], cfg['limits']
             )
 
             # Detect single-track mode early so EDA plots can use it.
@@ -123,10 +123,11 @@ def main(models=None, datasets=None):
             # 2. Summary
             print_header("2. Summary", file=f)
             print(f"Cleaned Base: {df_clean.shape[0]} rows", file=f)
-            print(f"Track A (Imputed): {df_imp.shape[0]} rows", file=f)
-            print(f"Track B (Dropped): {df_drop.shape[0]} rows", file=f)
             if single_track:
-                print("No missing values — single-track mode (Track A only).", file=f)
+                print(f"Rows: {df_imp.shape[0]} (no missing values — single-track mode)", file=f)
+            else:
+                print(f"Track A (Imputed): {df_imp.shape[0]} rows", file=f)
+                print(f"Track B (Dropped): {df_drop.shape[0]} rows", file=f)
 
             # 3. Preprocessing & Encoding
             print_header("3. Preprocessing & Encoding", file=f)
@@ -185,12 +186,14 @@ def main(models=None, datasets=None):
                     results[name] = metrics
                     preds[name]   = y_pred
                     fitted[name]  = model
-                    print(f"  {track_label}: Fitted {name}", file=f)
+                    prefix = f"  {track_label}: " if track_label else "  "
+                    print(f"{prefix}Fitted {name}", file=f)
                 print("\n", file=f)
                 return results, preds, histories, fitted
 
             # Run tracks — skip Track B entirely when data are identical
-            results_a, preds_a, hist_a, fitted_a = run_track(X_ta, X_va, y_ta, y_va, "Track A")
+            label_a = "" if single_track else "Track A"
+            results_a, preds_a, hist_a, fitted_a = run_track(X_ta, X_va, y_ta, y_va, label_a)
             if single_track:
                 results_b, preds_b, hist_b, fitted_b = results_a, preds_a, hist_a, fitted_a
                 X_tb, X_vb, y_tb, y_vb = X_ta, X_va, y_ta, y_va
@@ -311,11 +314,11 @@ def main(models=None, datasets=None):
                 )
 
             # 5. Final Comparison Table
-            summary_df = create_summary_table(results_a, results_b)
+            summary_df = create_summary_table(results_a, results_b, single_track=single_track)
             print("\nFinal Model Comparison (Strict 80/20 Test Evaluation):", file=f)
             print(summary_df.to_string(index=False), file=f)
 
         print(f"Done: {filename} -> {out_dir}/")
 
 if __name__ == "__main__":
-    main()
+    main("Gold_Price.csv")

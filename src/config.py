@@ -17,11 +17,9 @@ RESULTS_DIR.mkdir(exist_ok=True)
 DATASET_CONFIGS = {
     "StudentPerformanceFactors.csv": {
         "target": "Exam_Score",
-        "missing_cols": ["Parental_Education_Level", "Teacher_Quality", "Distance_from_Home"],
         "limits": {
             # Target Limit
             "Exam_Score": (100, "Score > 100"),
-            
             # Predictor Limits
             "Attendance": (100, "Attendance > 100%"),
             "Sleep_Hours": (24, "Sleep > 24h/night"),
@@ -31,16 +29,25 @@ DATASET_CONFIGS = {
             "Tutoring_Sessions": (60, "Tutoring > 60 sessions/month")
         }
     },
-    "Housing.csv": { 
+    "Housing.csv": {
         "target": "price",
-        "missing_cols": [], 
         "limits": {
-            "bedrooms": (10, "Bedrooms > 10"),   # Flags rare mansions/errors
-            "bathrooms": (10, "Bathrooms > 10"), 
+            "bedrooms": (10, "Bedrooms > 10"),
+            "bathrooms": (10, "Bathrooms > 10"),
             "stories": (5, "Stories > 5"),
-            "area": (20000, "Area > 20,000 sqft") # Flag massive estates
+            "area": (20000, "Area > 20,000 sqft")
         }
-    }     
+    },
+    "financial_regression.csv": {
+        "target": "gold_close",
+        "limits": {
+            "gold_close": (5000, "Gold Price > 5000"),
+            "oil_close": (200, "Oil Price > 200"),
+            "silver_close": (100, "Silver Price > 100"),
+            "sp500_close": (10000, "S&P 500 > 10,000"),
+            "us_rates_%": (20, "Interest Rates > 20%")
+        }
+    }
 }
 
 # Global ML Hyperparameters

@@ -4,9 +4,9 @@
 import pandas as pd
 
 
-def create_summary_table(results_a, results_b, models=None):
+def create_summary_table(results_a, results_b, models=None, single_track=False):
     """
-    Formats model evaluation results for both tracks into a comparison table.
+    Formats model evaluation results into a comparison table.
 
     Parameters
     ----------
@@ -16,10 +16,13 @@ def create_summary_table(results_a, results_b, models=None):
                              in insertion order.
                            - str: a single model name, e.g. "Lasso".
                            - list[str]: an explicit ordered subset of model names.
+    single_track         : If True, renders one set of RMSE/R² columns labelled
+                           plainly ("RMSE", "R²") rather than per-track columns.
 
     Returns
     -------
-    pd.DataFrame with columns for model name, RMSE, and R² on both tracks.
+    pd.DataFrame with model name plus RMSE and R² columns (one set per track,
+    or a single set when single_track=True).
     """
     if models is None:
         model_list = list(results_a.keys())
@@ -30,11 +33,18 @@ def create_summary_table(results_a, results_b, models=None):
 
     data = []
     for m in model_list:
-        data.append({
-            "Model":           m,
-            "Track A (RMSE)":  f"{results_a[m]['rmse']:.4f}",
-            "Track A R²":      f"{results_a[m]['r2']:.4f}",
-            "Track B (RMSE)":  f"{results_b[m]['rmse']:.4f}",
-            "Track B R²":      f"{results_b[m]['r2']:.4f}",
-        })
+        if single_track:
+            data.append({
+                "Model": m,
+                "RMSE":  f"{results_a[m]['rmse']:.4f}",
+                "R²":    f"{results_a[m]['r2']:.4f}",
+            })
+        else:
+            data.append({
+                "Model":           m,
+                "Track A (RMSE)":  f"{results_a[m]['rmse']:.4f}",
+                "Track A R²":      f"{results_a[m]['r2']:.4f}",
+                "Track B (RMSE)":  f"{results_b[m]['rmse']:.4f}",
+                "Track B R²":      f"{results_b[m]['r2']:.4f}",
+            })
     return pd.DataFrame(data)

@@ -49,26 +49,37 @@ def inspect_data(df, target, limits):
 
     print("Schema confirmed. Proceeding...\n")
 
-def load_and_clean(data_path, target, missing_cols, limits):
+def load_and_clean(data_path, target, limits):
     """
-    Loads the CSV, removes rows violating domain constraints, and generates
-    the two analytical tracks.
+    Loads the CSV, normalises column names, removes rows violating domain
+    constraints, and generates the two analytical tracks.
+
+    Column names are normalised on load: spaces are replaced with underscores
+    so that downstream code (config limits, preprocessing) can reference them
+    consistently regardless of the raw CSV formatting.
+
+    Missing columns for Track B (listwise deletion) are auto-detected from the
+    cleaned dataframe — any column that contains at least one NaN is included.
+    No manual specification in config is needed.
 
     Parameters
     ----------
-    data_path    : Path to the CSV file.
-    target       : Name of the response variable column.
-    missing_cols : List of columns used to define listwise deletion (Track B).
-    limits       : Dict mapping column names to (max_value, label) tuples.
+    data_path : Path to the CSV file.
+    target    : Name of the response variable column (post-normalisation).
+    limits    : Dict mapping column names to (max_value, label) tuples.
 
     Returns
     -------
-    df_raw          : Original DataFrame as loaded.
-    df_cleaned      : Post-constraint DataFrame (outliers removed).
-    df_imputed_base : df_cleaned with NaNs retained (Track A base).
-    df_dropped      : df_cleaned with missing rows removed (Track B).
+    df_raw          : DataFrame as loaded (column names already normalised).
+    df_cleaned      : Post-constraint DataFrame (domain outliers removed).
+    df_imputed_base : df_cleaned with NaNs retained — base for Track A.
+    df_dropped      : df_cleaned with any NaN rows removed — base for Track B.
     """
     df_raw = pd.read_csv(data_path)
+
+    # Normalise column names: spaces → underscores
+    df_raw.columns = df_raw.columns.str.replace(' ', '_', regex=False)
+
     df_base = df_raw.dropna(subset=[target]).copy()
 
     # Clean based on the target's limit if it exists in config
@@ -78,7 +89,10 @@ def load_and_clean(data_path, target, missing_cols, limits):
     else:
         df_cleaned = df_base.copy()
 
-    df_dropped = df_cleaned.dropna(subset=missing_cols).copy() if missing_cols else df_cleaned.dropna().copy()
+    # Detect columns that contain at least one missing value
+    missing_cols = [col for col in df_cleaned.columns if df_cleaned[col].isna().any()]
+
+    df_dropped = df_cleaned.dropna(subset=missing_cols).copy() if missing_cols else df_cleaned.copy()
     df_imputed_base = df_cleaned.copy()
-            
+
     return df_raw, df_cleaned, df_imputed_base, df_dropped
