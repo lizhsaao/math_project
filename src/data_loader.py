@@ -33,16 +33,23 @@ def inspect_data(df, target, limits):
             print(f"  {status_up} {label}: {upper_count} issues")
 
     # 2. CATEGORICAL SCHEMA DISCOVERY
-    _MAX_DISPLAY = 20   # show individual values only up to this many unique entries
+    _MAX_DISPLAY = 20   # show individual values only up to this many
+    
     print(f"\n--- Categorical Schema (Manual Review) ---")
     cat_cols = df.select_dtypes(include=['object', 'category']).columns
-    for col in cat_cols:
-        unique_vals = sorted(df[col].dropna().unique().astype(str))
-        if len(unique_vals) <= _MAX_DISPLAY:
-            print(f"  {col}: {', '.join(unique_vals)}")
-        else:
-            print(f"  {col}: [{len(unique_vals)} unique values — high cardinality, manual review recommended]")
+    if len(cat_cols) == 0:
+        print("  No categorical columns detected.")
     
+    for col in cat_cols:
+        unique_vals = df[col].dropna().unique()
+        n_unique = len(unique_vals)
+        if n_unique <= _MAX_DISPLAY:
+            vals_str = ", ".join(sorted(str(v) for v in unique_vals))
+            print(f"  {col}: {vals_str}")
+        else:
+            print(f"  {col}: [{n_unique} unique values — high cardinality, manual review recommended]")
+
+    print("Schema confirmed. Proceeding...\n")
 
 def load_and_clean(data_path, target, limits):
     """
@@ -69,10 +76,12 @@ def load_and_clean(data_path, target, limits):
     df_cleaned      : Post-constraint DataFrame (domain outliers removed).
     df_imputed_base : df_cleaned with NaNs retained — base for Track A.
     df_dropped      : df_cleaned with any NaN rows removed — base for Track B.
+    load_meta       : Dict with row counts — n_raw, n_cols, n_target_dropped,
+                      n_domain_removed, n_cleaned.
     """
     df_raw = pd.read_csv(data_path)
 
-    # Normalise column names: spaces → underscores
+    # Normalise column names: spaces -> underscores
     df_raw.columns = df_raw.columns.str.replace(' ', '_', regex=False)
 
     df_base = df_raw.dropna(subset=[target]).copy()
@@ -106,7 +115,14 @@ def load_and_clean(data_path, target, limits):
     df_dropped = df_cleaned.dropna(subset=missing_cols).copy() if missing_cols else df_cleaned.copy()
     df_imputed_base = df_cleaned.copy()
 
-    return df_raw, df_cleaned, df_imputed_base, df_dropped
+    load_meta = {
+        "n_raw":            len(df_raw),
+        "n_cols":           df_raw.shape[1],
+        "n_target_dropped": len(df_raw) - len(df_base),        # rows with missing target
+        "n_domain_removed": len(df_base) - len(df_cleaned),    # domain constraint violations
+        "n_cleaned":        len(df_cleaned),
+    }
+    return df_raw, df_cleaned, df_imputed_base, df_dropped, load_meta
 
 
 def calculate_vif(df, numeric_cols):
@@ -133,11 +149,15 @@ def calculate_vif(df, numeric_cols):
         print("  [INFO] VIF requires at least 2 numeric predictors — skipping.")
         return pd.DataFrame(columns=["Feature", "VIF"])
 
-    X = df[numeric_cols].dropna().values
+    # Add constant to prevent artificially high uncentered VIFs
+    X_df = df[numeric_cols].dropna().copy()
+    X_df.insert(0, 'const', 1.0)
+    X = X_df.values
     n_obs = len(X)
 
+    # Offset by 1 to skip the 'const' column at index 0
     vif_values = [
-        variance_inflation_factor(X, i) for i in range(len(numeric_cols))
+        variance_inflation_factor(X, i + 1) for i in range(len(numeric_cols))
     ]
     vif_df = (
         pd.DataFrame({"Feature": numeric_cols, "VIF": vif_values})
@@ -156,3 +176,92 @@ def calculate_vif(df, numeric_cols):
     print(f"\n  [VIF > 5 = moderate collinearity;  VIF > 10 = severe]")
 
     return vif_df
+
+
+def vif_drop_analysis(df, numeric_cols):
+    """
+    Demonstrates OLS estimator instability by identifying the single
+    highest-VIF predictor, removing it, and re-computing VIF on the
+    remaining predictors. The side-by-side comparison reveals how
+    collinearity propagates through the (X'X)^(-1) matrix, inflating the
+    variance of every OLS coefficient estimate in the model.
+
+    Parameters
+    ----------
+    df           : Cleaned DataFrame (post-outlier removal, pre-encoding).
+    numeric_cols : List of numeric predictor column names.
+
+    Returns
+    -------
+    (top_feature, top_vif) : Name and VIF of the dropped predictor.
+                             Both are None when < 3 numeric columns.
+    """
+    if len(numeric_cols) < 3:
+        return None, None
+
+    # Pin rows: use the same complete-case subset for BOTH computations so
+    # the before/after VIF comparison is valid (different dropna() calls on
+    # different column subsets could silently use different row counts).
+    complete_mask = df[numeric_cols].notna().all(axis=1)
+    base_df = df.loc[complete_mask]
+
+    X_full_df = base_df[numeric_cols].copy()
+    X_full_df.insert(0, 'const', 1.0)
+    X_full = X_full_df.values
+
+    # Compute full VIF for all predictors (offset +1 to skip 'const')
+    vif_full = {
+        col: variance_inflation_factor(X_full, i + 1)
+        for i, col in enumerate(numeric_cols)
+    }
+
+    # Identify the highest-VIF predictor
+    top_feature = max(vif_full, key=lambda c: (vif_full[c] if np.isfinite(vif_full[c]) else np.inf))
+    top_vif     = vif_full[top_feature]
+
+    # Re-compute VIF with that predictor removed — same rows as above
+    reduced_cols = [c for c in numeric_cols if c != top_feature]
+    X_reduced_df = base_df[reduced_cols].copy()
+    X_reduced_df.insert(0, 'const', 1.0)
+    X_reduced    = X_reduced_df.values
+
+    vif_reduced  = {
+        col: variance_inflation_factor(X_reduced, i + 1)
+        for i, col in enumerate(reduced_cols)
+    }
+
+    # Print comparison table sorted by full-VIF descending
+    sorted_cols = sorted(numeric_cols,
+                         key=lambda c: vif_full[c] if np.isfinite(vif_full[c]) else np.inf,
+                         reverse=True)
+
+    top_vif_str = f"{top_vif:.2f}" if np.isfinite(top_vif) else "inf"
+    print(f"\n--- VIF Drop Analysis: Demonstrating OLS Estimator Instability ---")
+    print(f"  Highest-VIF predictor: '{top_feature}'  (VIF = {top_vif_str})")
+    print(f"  Removing '{top_feature}' and re-computing VIF on remaining predictors:\n")
+    print(f"  {'Feature':<38}  {'VIF (full)':>10}  {'VIF (reduced)':>14}  {'Δ VIF':>8}")
+    print(f"  {'-'*76}")
+
+    n_changed = 0
+    for col in sorted_cols:
+        v_full = vif_full[col]
+        v_full_str = f"{v_full:10.2f}" if np.isfinite(v_full) else "       inf"
+        if col == top_feature:
+            print(f"  {col:<38}  {v_full_str}  {'[removed]':>14}  {'—':>8}")
+        else:
+            v_red = vif_reduced.get(col, float('nan'))
+            v_red_str = f"{v_red:14.2f}" if np.isfinite(v_red) else "           inf"
+            delta = v_red - v_full if np.isfinite(v_red) and np.isfinite(v_full) else float('nan')
+            delta_str = f"{delta:+8.2f}" if np.isfinite(delta) else "     n/a"
+            if np.isfinite(delta) and delta != 0:
+                n_changed += 1
+            print(f"  {col:<38}  {v_full_str}  {v_red_str}  {delta_str}")
+
+    print(f"\n  [OLS Collinearity Effect]")
+    print(f"  Removing a single predictor shifted the VIF of {n_changed}/{len(reduced_cols)}"
+          f" remaining feature(s).")
+    print(f"  High VIF inflates Var(β^) ∝ (X'X)^(-1): correlated predictors share explanatory")
+    print(f"  power, making OLS coefficients sensitive to small perturbations in X.")
+    print(f"  -> See Lasso Contrast in Section 4 for how L₁ regularisation resolves this.")
+
+    return top_feature, top_vif
