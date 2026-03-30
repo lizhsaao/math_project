@@ -4,21 +4,23 @@
     into a per-dataset subdirectory under results/.
 """
 import sys
+import numpy as np
 from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.dummy import DummyRegressor
+from sklearn.metrics import root_mean_squared_error, r2_score
 
 from src.config import (DATA_DIR, RESULTS_DIR, DATASET_CONFIGS, WIDTH,
                         DEPTHS, N_ESTIMATORS, LASSO_ALPHAS, RANDOM_STATE)
-from src.data_loader import load_and_clean, inspect_data
+from src.data_loader import load_and_clean, inspect_data, calculate_vif
 from src.preprocessing import preprocess_track
 from src.models import tune_decision_tree, tune_random_forest, tune_lasso, get_metrics_and_preds, cv_rmse_lr
 from src.visualiser import (plot_exam_score_distribution, plot_correlation_with_target,
                             plot_tuning_curve, plot_actual_vs_predicted,
                             plot_residuals, plot_feature_importance,
                             plot_lasso_tuning_curve, plot_lasso_coefficients)
-from src.evaluator import create_summary_table
+from src.evaluator import create_summary_table, residual_normality_tests, shapiro_wilk_lr
 
 # Canonical model order used as the default when models=None is passed to main().
 ALL_MODELS = [
@@ -113,6 +115,11 @@ def main(models=None, datasets=None):
             old_stdout = sys.stdout
             sys.stdout = Tee(sys.__stdout__, f)
             inspect_data(df_raw, cfg['target'], cfg['limits'])
+            numeric_pred_cols = [
+                c for c in df_clean.select_dtypes(include=[np.number]).columns
+                if c != cfg['target']
+            ]
+            calculate_vif(df_clean, numeric_pred_cols)
             sys.stdout = old_stdout
 
             # EDA plots
@@ -131,9 +138,16 @@ def main(models=None, datasets=None):
 
             # 3. Preprocessing & Encoding
             print_header("3. Preprocessing & Encoding", file=f)
-            X_ta, X_va, y_ta, y_va = preprocess_track(df_imp,  requires_imputation=True,  target=cfg['target'])
+            X_ta, X_va, y_ta, y_va, log_target = preprocess_track(
+                df_imp, requires_imputation=True, target=cfg['target']
+            )
+            if log_target:
+                print(f"  [log transform] Target '{cfg['target']}' is right-skewed "
+                      f"— log(y+1) applied. Metrics reported in original scale.", file=f)
             if not single_track:
-                X_tb, X_vb, y_tb, y_vb = preprocess_track(df_drop, requires_imputation=False, target=cfg['target'])
+                X_tb, X_vb, y_tb, y_vb, _ = preprocess_track(
+                    df_drop, requires_imputation=False, target=cfg['target']
+                )
 
             def run_track(X_tr, X_te, y_tr, y_te, track_label):
                 """
@@ -200,6 +214,31 @@ def main(models=None, datasets=None):
             else:
                 results_b, preds_b, hist_b, fitted_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
 
+            # Back-transform log(y+1) predictions using expm1 for final metrics and plots.
+            # Ensures RMSE and R² are reported in the original target scale.
+            if log_target:
+                y_va_disp = np.expm1(y_va)
+                preds_a_disp = {n: np.expm1(p) for n, p in preds_a.items()}
+                results_a = {
+                    n: {"rmse": root_mean_squared_error(y_va_disp, preds_a_disp[n]),
+                        "r2": r2_score(y_va_disp, preds_a_disp[n])}
+                    for n in preds_a
+                }
+                if single_track:
+                    y_vb_disp, preds_b_disp = y_va_disp, preds_a_disp
+                    results_b = results_a
+                else:
+                    y_vb_disp = np.expm1(y_vb)
+                    preds_b_disp = {n: np.expm1(p) for n, p in preds_b.items()}
+                    results_b = {
+                        n: {"rmse": root_mean_squared_error(y_vb_disp, preds_b_disp[n]),
+                            "r2": r2_score(y_vb_disp, preds_b_disp[n])}
+                        for n in preds_b
+                    }
+            else:
+                y_va_disp, preds_a_disp = y_va, preds_a
+                y_vb_disp, preds_b_disp = y_vb, preds_b
+
             print(f"Final Feature Count: {X_ta.shape[1]}", file=f)
 
             # Optimal hyperparameters — plain text to report, ANSI colour to terminal
@@ -251,6 +290,12 @@ def main(models=None, datasets=None):
             lr_rmse_b = cv_rmse_lr(X_tb, y_tb) if (needs_lr_baseline and not single_track) else None
 
             # Tuning curves — only drawn when the corresponding tuning was performed
+            if "Lasso" in hist_a:
+                plot_lasso_tuning_curve(hist_a["Lasso"], hist_b["Lasso"],
+                                        out_dir / "Lasso_tuning.png",
+                                        lr_rmse_a=lr_rmse_a, lr_rmse_b=lr_rmse_b,
+                                        single_track=single_track)
+                            
             if "DT" in hist_a:
                 plot_tuning_curve(hist_a["DT"], hist_b["DT"],
                                   out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b,
@@ -263,45 +308,39 @@ def main(models=None, datasets=None):
                                   suptitle="CV RMSE vs. Number of Trees  (10-fold CV)",
                                   single_track=single_track)
 
-            if "Lasso" in hist_a:
-                plot_lasso_tuning_curve(hist_a["Lasso"], hist_b["Lasso"],
-                                        out_dir / "Lasso_tuning.png",
-                                        lr_rmse_a=lr_rmse_a, lr_rmse_b=lr_rmse_b,
-                                        single_track=single_track)
-
             # Actual vs. predicted — one figure per fitted model
-            for name in [m for m in model_list if m in preds_a]:
+            for name in [m for m in model_list if m in preds_a_disp]:
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_actual_vs_predicted(
-                    y_va, preds_a[name], y_vb, preds_b[name],
+                    y_va_disp, preds_a_disp[name], y_vb_disp, preds_b_disp[name],
                     name, out_dir / f"{clean}_actual_vs_pred.png",
                     single_track=single_track, target=cfg['target']
                 )
 
             # Residuals — drawn for fitted models among the standard candidates
             for name in [m for m in ["Linear Regression", "Lasso", "DT (Optimal)", "Random Forest"]
-                         if m in preds_a]:
+                         if m in preds_a_disp]:
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_residuals(
-                    y_va, preds_a[name], y_vb, preds_b[name],
+                    y_va_disp, preds_a_disp[name], y_vb_disp, preds_b_disp[name],
                     name, out_dir / f"{clean}_residuals.png",
                     single_track=single_track, target=cfg['target']
                 )
 
             # Feature importances — only when the relevant model was fitted
-            if "DT (Optimal)" in fitted_a:
-                plot_feature_importance(
-                    fitted_a["DT (Optimal)"], fitted_b["DT (Optimal)"],
-                    X_ta.columns, X_tb.columns,
-                    out_dir / "DT_feature_importance.png",
-                    single_track=single_track
-                )
-
             if "Lasso" in fitted_a:
                 plot_lasso_coefficients(
                     fitted_a["Lasso"], fitted_b["Lasso"],
                     X_ta.columns, X_tb.columns,
                     out_dir / "Lasso_coefficients.png",
+                    single_track=single_track
+                )
+            
+            if "DT (Optimal)" in fitted_a:
+                plot_feature_importance(
+                    fitted_a["DT (Optimal)"], fitted_b["DT (Optimal)"],
+                    X_ta.columns, X_tb.columns,
+                    out_dir / "DT_feature_importance.png",
                     single_track=single_track
                 )
 
@@ -313,7 +352,41 @@ def main(models=None, datasets=None):
                     model_name="Random Forest", single_track=single_track
                 )
 
-            # 5. Final Comparison Table
+            # 5. Residual Normality Tests (Shapiro-Wilk)
+            print_header("5. Residual Normality Tests", file=f)
+            sys.stdout = Tee(sys.__stdout__, f)
+            residual_normality_tests(
+                preds_a_disp, y_va_disp,
+                preds_b_disp if not single_track else None,
+                y_vb_disp    if not single_track else None,
+                single_track=single_track,
+                models=model_list,
+            )
+            # Focused LR test — formal OLS assumption check.
+            # The normality assumption applies to residuals in the scale the
+            # model was fitted on. When log(y+1) was applied, use the log-scale
+            # y and predictions (pre-expm1); otherwise use the display scale.
+            if "Linear Regression" in preds_a_disp:
+                if log_target:
+                    sw_y_a = y_va
+                    sw_p_a = preds_a["Linear Regression"]
+                    sw_y_b = y_vb if not single_track else None
+                    sw_p_b = preds_b["Linear Regression"] if not single_track else None
+                    sw_note = "Residuals in log-scale (model fitting scale, before back-transform)."
+                else:
+                    sw_y_a = y_va_disp
+                    sw_p_a = preds_a_disp["Linear Regression"]
+                    sw_y_b = y_vb_disp if not single_track else None
+                    sw_p_b = preds_b_disp["Linear Regression"] if not single_track else None
+                    sw_note = ""
+                shapiro_wilk_lr(
+                    sw_y_a, sw_p_a, sw_y_b, sw_p_b,
+                    single_track=single_track,
+                    note=sw_note,
+                )
+            sys.stdout = old_stdout
+
+            # 6. Final Comparison Table
             summary_df = create_summary_table(results_a, results_b, single_track=single_track)
             print("\nFinal Model Comparison (Strict 80/20 Test Evaluation):", file=f)
             print(summary_df.to_string(index=False), file=f)
@@ -322,4 +395,5 @@ def main(models=None, datasets=None):
 
 if __name__ == "__main__":
     # main(datasets = "winequality-red.csv")
+    # main(datasets = {"StudentPerformanceFactors.csv", "Housing.csv"})
     main()

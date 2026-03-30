@@ -1,12 +1,12 @@
 import pandas as pd
 import numpy as np
-import sys
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 from src.config import WIDTH, SPARSITY_THRESHOLD
 
 def inspect_data(df, target, limits):
     """
-    Prints a data integrity report for manual review, then prompts the user
-    to confirm the categorical schema before proceeding.
+    Prints a data integrity report: negative/upper-limit checks for numeric
+    columns and a categorical schema listing for manual review in the output log.
 
     Parameters
     ----------
@@ -43,15 +43,6 @@ def inspect_data(df, target, limits):
         else:
             print(f"  {col}: [{len(unique_vals)} unique values — high cardinality, manual review recommended]")
     
-    # --- MANUAL GATEKEEPER ---
-    sys.__stdout__.write("\nConfirm categorical schema above (Y/N): ")
-    sys.__stdout__.flush()
-    user_input = sys.stdin.readline().strip().upper()
-    if user_input != 'Y':
-        print("\n[TERMINATED] Analysis halted for manual data review.")
-        sys.exit()
-
-    print("Schema confirmed. Proceeding...\n")
 
 def load_and_clean(data_path, target, limits):
     """
@@ -116,3 +107,52 @@ def load_and_clean(data_path, target, limits):
     df_imputed_base = df_cleaned.copy()
 
     return df_raw, df_cleaned, df_imputed_base, df_dropped
+
+
+def calculate_vif(df, numeric_cols):
+    """
+    Calculates the Variance Inflation Factor (VIF) for each column in
+    numeric_cols using statsmodels.stats.outliers_influence.
+
+    VIF_i = 1 / (1 - R²_i), where R²_i is the R² from regressing predictor i
+    on all other predictors in numeric_cols. Only complete cases are used.
+
+    Categorical columns should be excluded before calling — pass only the
+    numeric predictors you want to assess for multicollinearity.
+
+    Parameters
+    ----------
+    df           : Cleaned DataFrame (post-outlier removal, pre-encoding).
+    numeric_cols : List of numeric predictor column names to include.
+
+    Returns
+    -------
+    pd.DataFrame with columns ["Feature", "VIF"] sorted by VIF descending.
+    """
+    if len(numeric_cols) < 2:
+        print("  [INFO] VIF requires at least 2 numeric predictors — skipping.")
+        return pd.DataFrame(columns=["Feature", "VIF"])
+
+    X = df[numeric_cols].dropna().values
+    n_obs = len(X)
+
+    vif_values = [
+        variance_inflation_factor(X, i) for i in range(len(numeric_cols))
+    ]
+    vif_df = (
+        pd.DataFrame({"Feature": numeric_cols, "VIF": vif_values})
+        .sort_values("VIF", ascending=False)
+        .reset_index(drop=True)
+    )
+
+    print(f"\n--- VIF (Variance Inflation Factor, n={n_obs} complete cases) ---")
+    print(f"  {'Feature':<38} {'VIF':>8}  Note")
+    print(f"  {'-'*60}")
+    for _, row in vif_df.iterrows():
+        vif  = row["VIF"]
+        note = "[SEVERE]   VIF >= 10" if vif >= 10 else ("[moderate] VIF >= 5" if vif >= 5 else "")
+        vif_str = f"{vif:8.2f}" if np.isfinite(vif) else "     inf"
+        print(f"  {row['Feature']:<38} {vif_str}  {note}")
+    print(f"\n  [VIF > 5 = moderate collinearity;  VIF > 10 = severe]")
+
+    return vif_df

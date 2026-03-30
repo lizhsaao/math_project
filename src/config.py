@@ -53,15 +53,17 @@ DATASET_CONFIGS = {
     }
 }
 
-# Columns with a missing-value rate above this threshold are dropped entirely
-# during load_and_clean (before Track A/B split). Keeps genuinely sparse
-# macro indicators (e.g. monthly CPI in a daily dataset) from destroying Track B.
+# Drop sparse columns before Track A/B split to prevent low-coverage indicators from skewing Track B.
 SPARSITY_THRESHOLD = 0.20   # 20 %
+
+# Apply log(y+1) transform if target skewness exceeds threshold; 
+# back-transform for all reported metrics and plots.
+LOG_SKEWNESS_THRESHOLD = 0.75
 
 # Global ML Hyperparameters
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
 CV_FOLDS = 10
 DEPTHS = list(range(1, 21))
-N_ESTIMATORS = list(range(10, 210, 20)) # 10, 30, ..., 190 — 10 candidates (was 30)
-LASSO_ALPHAS = list(np.logspace(-3, 2, 50))  # 0.001 -> 100 on log scale, 50 candidates (was 100)
+N_ESTIMATORS = list(range(10, 210, 20)) # 10, 30, ..., 190 — 10 candidates
+LASSO_ALPHAS = list(np.logspace(-3, 2, 50))  # 0.001 -> 100 on log scale, 50 candidates
