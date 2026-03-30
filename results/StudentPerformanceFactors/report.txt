@@ -8,6 +8,10 @@ Processing Dataset: StudentPerformanceFactors.csv=
 ================1. Load & Inspect=================
 ==================================================
 
+  Dataset:    6607 rows × 20 columns (raw)
+  Dropped:    1 row(s) — domain constraint violations
+  Clean base: 6606 rows
+
 
 --- Data Integrity Inspection ---
   [PASS] Hours_Studied (Negative Check): 0 issues
@@ -39,18 +43,41 @@ Processing Dataset: StudentPerformanceFactors.csv=
   Parental_Education_Level: College, High School, Postgraduate
   Distance_from_Home: Far, Moderate, Near
   Gender: Female, Male
+Schema confirmed. Proceeding...
+
 
 --- VIF (Variance Inflation Factor, n=6606 complete cases) ---
   Feature                                     VIF  Note
   ------------------------------------------------------------
-  Attendance                                28.61  [SEVERE]   VIF >= 10
-  Previous_Scores                           21.52  [SEVERE]   VIF >= 10
-  Sleep_Hours                               19.14  [SEVERE]   VIF >= 10
-  Hours_Studied                             11.12  [SEVERE]   VIF >= 10
-  Physical_Activity                          8.59  [moderate] VIF >= 5
-  Tutoring_Sessions                          2.45  
+  Previous_Scores                            1.00  
+  Attendance                                 1.00  
+  Hours_Studied                              1.00  
+  Tutoring_Sessions                          1.00  
+  Sleep_Hours                                1.00  
+  Physical_Activity                          1.00  
 
   [VIF > 5 = moderate collinearity;  VIF > 10 = severe]
+
+--- VIF Drop Analysis: Demonstrating OLS Estimator Instability ---
+  Highest-VIF predictor: 'Previous_Scores'  (VIF = 1.00)
+  Removing 'Previous_Scores' and re-computing VIF on remaining predictors:
+
+  Feature                                 VIF (full)   VIF (reduced)     Δ VIF
+  ----------------------------------------------------------------------------
+  Previous_Scores                               1.00       [removed]         —
+  Attendance                                    1.00            1.00     -0.00
+  Hours_Studied                                 1.00            1.00     -0.00
+  Tutoring_Sessions                             1.00            1.00     -0.00
+  Sleep_Hours                                   1.00            1.00     -0.00
+  Physical_Activity                             1.00            1.00     -0.00
+
+  [OLS Collinearity Effect]
+  Removing a single predictor shifted the VIF of 5/5 remaining feature(s).
+  High VIF inflates Var(β^) ∝ (X'X)^(-1): correlated predictors share explanatory
+  power, making OLS coefficients sensitive to small perturbations in X.
+  -> See Lasso Contrast in Section 4 for how L₁ regularisation resolves this.
+  [Plot saved]  score_distribution.png
+  [Plot saved]  correlation.png
 
 ==================================================
 ====================2. Summary====================
@@ -64,7 +91,14 @@ Track B (Dropped): 6377 rows
 ===========3. Preprocessing & Encoding============
 ==================================================
 
-  [log transform] Target 'Exam_Score' is right-skewed — log(y+1) applied. Metrics reported in original scale.
+  [Log Transform]  Train-set skewness = +1.6626  (|skew| > 0.75) -> np.log1p applied.
+                   Metrics and plots reported in original scale (np.expm1).
+  [Imputation]     3 column(s) with missing values -> median (numeric) / mode (categorical) fill:
+                   Teacher_Quality, Parental_Education_Level, Distance_from_Home
+  [Encoding]       13 categorical column(s) -> 21 dummy columns (one-hot, drop_first=True):
+                   Parental_Involvement, Access_to_Resources, Extracurricular_Activities, Motivation_Level, Internet_Access, Family_Income, Teacher_Quality, School_Type, Peer_Influence, Learning_Disabilities, Parental_Education_Level, Distance_from_Home, Gender
+  [Scaling]        StandardScaler fitted on train fold only -> applied to test (no leakage).
+
   Track A: Fitted Null Model
   Track A: Fitted Linear Regression
   Track A: Fitted Lasso
@@ -83,15 +117,89 @@ Track B (Dropped): 6377 rows
   Track B: Fitted Random Forest
 
 
-Final Feature Count: 27
-Optimal DT depth — Track A: 3,  Track B: 3
+Final Feature Count: 27 
+
 Optimal Lasso α  — Track A: 0.003237,  Track B: 0.003237
+Optimal DT depth — Track A: 3,  Track B: 3
 Optimal n_estimators — Track A: 10,  Track B: 10
 
 ==================================================
 =======4. Model Evaluation & Visualisation========
 ==================================================
 
+  [Plot saved]  Lasso_tuning.png
+  [Plot saved]  DT_tuning.png
+  [Plot saved]  RF_tuning.png
+  [Plot saved]  Null_Model_actual_vs_pred.png
+  [Plot saved]  Linear_Regression_actual_vs_pred.png
+  [Plot saved]  Lasso_actual_vs_pred.png
+  [Plot saved]  DT_Depth_3_actual_vs_pred.png
+  [Plot saved]  DT_Unconstrained_actual_vs_pred.png
+  [Plot saved]  DT_Optimal_actual_vs_pred.png
+  [Plot saved]  Random_Forest_actual_vs_pred.png
+  [Plot saved]  Linear_Regression_residuals.png
+  [Plot saved]  Lasso_residuals.png
+  [Plot saved]  DT_Optimal_residuals.png
+  [Plot saved]  Random_Forest_residuals.png
+  [Plot saved]  Lasso_coefficients.png
+
+--- Lasso Contrast: L_1 Regularisation as Multicollinearity Resolution ---
+  Objective: minimise  RSS(β) + λ·Σ|β_j|
+  The L_1 penalty shrinks redundant coefficients to exactly zero,
+  performing automated feature selection where OLS estimator variance explodes.
+
+  Track A: 17/27 features retained  (λ = 0.0032375)
+  Feature                                    β (Lasso)
+  -------------------------------------------------------
+  Attendance                                   +0.0303
+  Hours_Studied                                +0.0222
+  Previous_Scores                              +0.0068
+  Tutoring_Sessions                            +0.0056
+  Access_to_Resources_Low                      -0.0055
+  Parental_Involvement_Low                     -0.0049
+  Family_Income_Low                            -0.0016
+  Peer_Influence_Positive                      +0.0016
+  Parental_Education_Level_High School         -0.0015
+  Motivation_Level_Low                         -0.0013
+  Distance_from_Home_Near                      +0.0011
+  Parental_Involvement_Medium                  -0.0010
+  Learning_Disabilities_Yes                    -0.0009
+  Parental_Education_Level_Postgraduate        +0.0009
+  Extracurricular_Activities_Yes               +0.0008
+  Access_to_Resources_Medium                   -0.0007
+  Internet_Access_Yes                          +0.0003
+  Zeroed-out (10):  Sleep_Hours, Physical_Activity, Motivation_Level_Medium, Family_Income_Medium, Teacher_Quality_Low, Teacher_Quality_Medium, School_Type_Public, Peer_Influence_Neutral, Distance_from_Home_Moderate, Gender_Male
+
+  Track B: 17/27 features retained  (λ = 0.0032375)
+  Feature                                    β (Lasso)
+  -------------------------------------------------------
+  Attendance                                   +0.0300
+  Hours_Studied                                +0.0224
+  Previous_Scores                              +0.0064
+  Tutoring_Sessions                            +0.0054
+  Parental_Involvement_Low                     -0.0050
+  Access_to_Resources_Low                      -0.0047
+  Family_Income_Low                            -0.0017
+  Motivation_Level_Low                         -0.0016
+  Peer_Influence_Positive                      +0.0015
+  Distance_from_Home_Near                      +0.0013
+  Parental_Education_Level_High School         -0.0012
+  Parental_Education_Level_Postgraduate        +0.0009
+  Parental_Involvement_Medium                  -0.0007
+  Extracurricular_Activities_Yes               +0.0005
+  Access_to_Resources_Medium                   -0.0004
+  Internet_Access_Yes                          +0.0002
+  Learning_Disabilities_Yes                    -0.0002
+  Zeroed-out (10):  Sleep_Hours, Physical_Activity, Motivation_Level_Medium, Family_Income_Medium, Teacher_Quality_Low, Teacher_Quality_Medium, School_Type_Public, Peer_Influence_Neutral, Distance_from_Home_Moderate, Gender_Male
+
+  VIF cross-reference: 'Previous_Scores' (highest VIF = 1.00) -> β = +0.0068  (retained)
+
+  The L_1 constraint forces the optimiser to select at most one
+  predictor from a correlated group, resolving the (X'X)^(-1) variance
+  inflation that destabilises OLS where multicollinearity is present.
+  -> See Lasso_coefficients.png for the full sparse coefficient profile.
+  [Plot saved]  DT_feature_importance.png
+  [Plot saved]  RF_feature_importance.png
 
 ==================================================
 ===========5. Residual Normality Tests============

@@ -262,6 +262,6 @@ def vif_drop_analysis(df, numeric_cols):
           f" remaining feature(s).")
     print(f"  High VIF inflates Var(β^) ∝ (X'X)^(-1): correlated predictors share explanatory")
     print(f"  power, making OLS coefficients sensitive to small perturbations in X.")
-    print(f"  -> See Lasso Contrast in Section 4 for how L₁ regularisation resolves this.")
+    print(f"  -> See Lasso Contrast in Section 4 for how L_1 regularisation resolves this.")
 
     return top_feature, top_vif

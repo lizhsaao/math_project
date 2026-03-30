@@ -8,6 +8,9 @@
 ================1. Load & Inspect=================
 ==================================================
 
+  Dataset:    545 rows × 13 columns (raw)
+  Clean base: 545 rows
+
 
 --- Data Integrity Inspection ---
   [PASS] price (Negative Check): 0 issues
@@ -29,17 +32,39 @@
   airconditioning: no, yes
   prefarea: no, yes
   furnishingstatus: furnished, semi-furnished, unfurnished
+Schema confirmed. Proceeding...
+
 
 --- VIF (Variance Inflation Factor, n=545 complete cases) ---
   Feature                                     VIF  Note
   ------------------------------------------------------------
-  bedrooms                                  13.65  [SEVERE]   VIF >= 10
-  bathrooms                                  9.16  [moderate] VIF >= 5
-  area                                       6.74  [moderate] VIF >= 5
-  stories                                    6.68  [moderate] VIF >= 5
-  parking                                    1.90  
+  bedrooms                                   1.32  
+  stories                                    1.26  
+  bathrooms                                  1.25  
+  area                                       1.17  
+  parking                                    1.16  
 
   [VIF > 5 = moderate collinearity;  VIF > 10 = severe]
+
+--- VIF Drop Analysis: Demonstrating OLS Estimator Instability ---
+  Highest-VIF predictor: 'bedrooms'  (VIF = 1.32)
+  Removing 'bedrooms' and re-computing VIF on remaining predictors:
+
+  Feature                                 VIF (full)   VIF (reduced)     Δ VIF
+  ----------------------------------------------------------------------------
+  bedrooms                                      1.32       [removed]         —
+  stories                                       1.26            1.12     -0.14
+  bathrooms                                     1.25            1.17     -0.08
+  area                                          1.17            1.17     -0.00
+  parking                                       1.16            1.16     -0.00
+
+  [OLS Collinearity Effect]
+  Removing a single predictor shifted the VIF of 4/4 remaining feature(s).
+  High VIF inflates Var(β^) ∝ (X'X)^(-1): correlated predictors share explanatory
+  power, making OLS coefficients sensitive to small perturbations in X.
+  -> See Lasso Contrast in Section 4 for how L₁ regularisation resolves this.
+  [Plot saved]  score_distribution.png
+  [Plot saved]  correlation.png
 
 ==================================================
 ====================2. Summary====================
@@ -52,7 +77,13 @@ Rows: 545 (no missing values — single-track mode)
 ===========3. Preprocessing & Encoding============
 ==================================================
 
-  [log transform] Target 'price' is right-skewed — log(y+1) applied. Metrics reported in original scale.
+  [Log Transform]  Train-set skewness = +1.1981  (|skew| > 0.75) -> np.log1p applied.
+                   Metrics and plots reported in original scale (np.expm1).
+  [Imputation]     No missing values — no imputation required.
+  [Encoding]       7 categorical column(s) -> 8 dummy columns (one-hot, drop_first=True):
+                   mainroad, guestroom, basement, hotwaterheating, airconditioning, prefarea, furnishingstatus
+  [Scaling]        StandardScaler fitted on train fold only -> applied to test (no leakage).
+
   Fitted Null Model
   Fitted Linear Regression
   Fitted Lasso
@@ -62,15 +93,61 @@ Rows: 545 (no missing values — single-track mode)
   Fitted Random Forest
 
 
-Final Feature Count: 13
-Optimal DT depth — 3
+Final Feature Count: 13 
+
 Optimal Lasso α  — 0.04292
+Optimal DT depth — 3
 Optimal n_estimators — 10
 
 ==================================================
 =======4. Model Evaluation & Visualisation========
 ==================================================
 
+  [Plot saved]  Lasso_tuning.png
+  [Plot saved]  DT_tuning.png
+  [Plot saved]  RF_tuning.png
+  [Plot saved]  Null_Model_actual_vs_pred.png
+  [Plot saved]  Linear_Regression_actual_vs_pred.png
+  [Plot saved]  Lasso_actual_vs_pred.png
+  [Plot saved]  DT_Depth_3_actual_vs_pred.png
+  [Plot saved]  DT_Unconstrained_actual_vs_pred.png
+  [Plot saved]  DT_Optimal_actual_vs_pred.png
+  [Plot saved]  Random_Forest_actual_vs_pred.png
+  [Plot saved]  Linear_Regression_residuals.png
+  [Plot saved]  Lasso_residuals.png
+  [Plot saved]  DT_Optimal_residuals.png
+  [Plot saved]  Random_Forest_residuals.png
+  [Plot saved]  Lasso_coefficients.png
+
+--- Lasso Contrast: L_1 Regularisation as Multicollinearity Resolution ---
+  Objective: minimise  RSS(β) + λ·Σ|β_j|
+  The L_1 penalty shrinks redundant coefficients to exactly zero,
+  performing automated feature selection where OLS estimator variance explodes.
+
+  Track A: 11/13 features retained  (λ = 0.042919)
+  Feature                                    β (Lasso)
+  -------------------------------------------------------
+  area                                         +0.0951
+  bathrooms                                    +0.0770
+  airconditioning_yes                          +0.0576
+  stories                                      +0.0435
+  furnishingstatus_unfurnished                 -0.0312
+  prefarea_yes                                 +0.0300
+  basement_yes                                 +0.0199
+  mainroad_yes                                 +0.0191
+  parking                                      +0.0133
+  guestroom_yes                                +0.0047
+  bedrooms                                     +0.0039
+  Zeroed-out (2):  hotwaterheating_yes, furnishingstatus_semi-furnished
+
+  VIF cross-reference: 'bedrooms' (highest VIF = 1.32) -> β = +0.0039  (retained)
+
+  The L_1 constraint forces the optimiser to select at most one
+  predictor from a correlated group, resolving the (X'X)^(-1) variance
+  inflation that destabilises OLS where multicollinearity is present.
+  -> See Lasso_coefficients.png for the full sparse coefficient profile.
+  [Plot saved]  DT_feature_importance.png
+  [Plot saved]  RF_feature_importance.png
 
 ==================================================
 ===========5. Residual Normality Tests============

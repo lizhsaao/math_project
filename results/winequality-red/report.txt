@@ -8,6 +8,9 @@
 ================1. Load & Inspect=================
 ==================================================
 
+  Dataset:    1599 rows × 12 columns (raw)
+  Clean base: 1599 rows
+
 
 --- Data Integrity Inspection ---
   [PASS] fixed_acidity (Negative Check): 0 issues
@@ -29,23 +32,52 @@
   [PASS] Quality Score > 10: 0 issues
 
 --- Categorical Schema (Manual Review) ---
+  No categorical columns detected.
+Schema confirmed. Proceeding...
+
 
 --- VIF (Variance Inflation Factor, n=1599 complete cases) ---
   Feature                                     VIF  Note
   ------------------------------------------------------------
-  density                                 1479.29  [SEVERE]   VIF >= 10
-  pH                                      1070.97  [SEVERE]   VIF >= 10
-  alcohol                                  124.39  [SEVERE]   VIF >= 10
-  fixed_acidity                             74.45  [SEVERE]   VIF >= 10
-  sulphates                                 21.59  [SEVERE]   VIF >= 10
-  volatile_acidity                          17.06  [SEVERE]   VIF >= 10
-  citric_acid                                9.18  [moderate] VIF >= 5
-  chlorides                                  6.55  [moderate] VIF >= 5
-  total_sulfur_dioxide                       6.52  [moderate] VIF >= 5
-  free_sulfur_dioxide                        6.44  [moderate] VIF >= 5
-  residual_sugar                             4.66  
+  fixed_acidity                              7.77  [moderate] VIF >= 5
+  density                                    6.34  [moderate] VIF >= 5
+  pH                                         3.33  
+  citric_acid                                3.13  
+  alcohol                                    3.03  
+  total_sulfur_dioxide                       2.19  
+  free_sulfur_dioxide                        1.96  
+  volatile_acidity                           1.79  
+  residual_sugar                             1.70  
+  chlorides                                  1.48  
+  sulphates                                  1.43  
 
   [VIF > 5 = moderate collinearity;  VIF > 10 = severe]
+
+--- VIF Drop Analysis: Demonstrating OLS Estimator Instability ---
+  Highest-VIF predictor: 'fixed_acidity'  (VIF = 7.77)
+  Removing 'fixed_acidity' and re-computing VIF on remaining predictors:
+
+  Feature                                 VIF (full)   VIF (reduced)     Δ VIF
+  ----------------------------------------------------------------------------
+  fixed_acidity                                 7.77       [removed]         —
+  density                                       6.34            2.43     -3.91
+  pH                                            3.33            1.61     -1.72
+  citric_acid                                   3.13            2.78     -0.35
+  alcohol                                       3.03            2.14     -0.90
+  total_sulfur_dioxide                          2.19            2.07     -0.12
+  free_sulfur_dioxide                           1.96            1.94     -0.02
+  volatile_acidity                              1.79            1.78     -0.00
+  residual_sugar                                1.70            1.39     -0.32
+  chlorides                                     1.48            1.40     -0.08
+  sulphates                                     1.43            1.40     -0.03
+
+  [OLS Collinearity Effect]
+  Removing a single predictor shifted the VIF of 10/10 remaining feature(s).
+  High VIF inflates Var(β^) ∝ (X'X)^(-1): correlated predictors share explanatory
+  power, making OLS coefficients sensitive to small perturbations in X.
+  -> See Lasso Contrast in Section 4 for how L₁ regularisation resolves this.
+  [Plot saved]  score_distribution.png
+  [Plot saved]  correlation.png
 
 ==================================================
 ====================2. Summary====================
@@ -58,6 +90,11 @@ Rows: 1599 (no missing values — single-track mode)
 ===========3. Preprocessing & Encoding============
 ==================================================
 
+  [Log Transform]  Train-set skewness = +0.1937  (|skew| ≤ 0.75) -> no transformation.
+  [Imputation]     No missing values — no imputation required.
+  [Encoding]       No categorical predictors.
+  [Scaling]        StandardScaler fitted on train fold only -> applied to test (no leakage).
+
   Fitted Null Model
   Fitted Linear Regression
   Fitted Lasso
@@ -67,15 +104,53 @@ Rows: 1599 (no missing values — single-track mode)
   Fitted Random Forest
 
 
-Final Feature Count: 11
-Optimal DT depth — 2
+Final Feature Count: 11 
+
 Optimal Lasso α  — 0.1099
+Optimal DT depth — 2
 Optimal n_estimators — 10
 
 ==================================================
 =======4. Model Evaluation & Visualisation========
 ==================================================
 
+  [Plot saved]  Lasso_tuning.png
+  [Plot saved]  DT_tuning.png
+  [Plot saved]  RF_tuning.png
+  [Plot saved]  Null_Model_actual_vs_pred.png
+  [Plot saved]  Linear_Regression_actual_vs_pred.png
+  [Plot saved]  Lasso_actual_vs_pred.png
+  [Plot saved]  DT_Depth_3_actual_vs_pred.png
+  [Plot saved]  DT_Unconstrained_actual_vs_pred.png
+  [Plot saved]  DT_Optimal_actual_vs_pred.png
+  [Plot saved]  Random_Forest_actual_vs_pred.png
+  [Plot saved]  Linear_Regression_residuals.png
+  [Plot saved]  Lasso_residuals.png
+  [Plot saved]  DT_Optimal_residuals.png
+  [Plot saved]  Random_Forest_residuals.png
+  [Plot saved]  Lasso_coefficients.png
+
+--- Lasso Contrast: L_1 Regularisation as Multicollinearity Resolution ---
+  Objective: minimise  RSS(β) + λ·Σ|β_j|
+  The L_1 penalty shrinks redundant coefficients to exactly zero,
+  performing automated feature selection where OLS estimator variance explodes.
+
+  Track A: 3/11 features retained  (λ = 0.10985)
+  Feature                                    β (Lasso)
+  -------------------------------------------------------
+  alcohol                                      +0.2399
+  volatile_acidity                             -0.1381
+  sulphates                                    +0.0256
+  Zeroed-out (8):  fixed_acidity, citric_acid, residual_sugar, chlorides, free_sulfur_dioxide, total_sulfur_dioxide, density, pH
+
+  VIF cross-reference: 'fixed_acidity' (highest VIF = 7.77) -> β = 0.0000  (eliminated by L_1 penalty)
+
+  The L_1 constraint forces the optimiser to select at most one
+  predictor from a correlated group, resolving the (X'X)^(-1) variance
+  inflation that destabilises OLS where multicollinearity is present.
+  -> See Lasso_coefficients.png for the full sparse coefficient profile.
+  [Plot saved]  DT_feature_importance.png
+  [Plot saved]  RF_feature_importance.png
 
 ==================================================
 ===========5. Residual Normality Tests============
