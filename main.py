@@ -12,8 +12,9 @@ from sklearn.dummy import DummyRegressor
 from sklearn.metrics import root_mean_squared_error, r2_score
 
 from src.config import (DATA_DIR, RESULTS_DIR, DATASET_CONFIGS, WIDTH,
-                        DEPTHS, N_ESTIMATORS, LASSO_ALPHAS, RANDOM_STATE)
-from src.data_loader import load_and_clean, inspect_data, calculate_vif
+                        DEPTHS, N_ESTIMATORS, LASSO_ALPHAS, RANDOM_STATE,
+                        LOG_SKEWNESS_THRESHOLD)
+from src.data_loader import load_and_clean, inspect_data, calculate_vif, vif_drop_analysis
 from src.preprocessing import preprocess_track
 from src.models import tune_decision_tree, tune_random_forest, tune_lasso, get_metrics_and_preds, cv_rmse_lr
 from src.visualiser import (plot_exam_score_distribution, plot_correlation_with_target,
@@ -38,6 +39,55 @@ class Tee:
     def flush(self):
         for s in self.streams:
             s.flush()
+
+def _print_lasso_contrast(fitted_a, fitted_b, X_ta, X_tb,
+                           vif_top_feature, vif_top_vif, single_track, f):
+    """
+    Prints a Lasso L_1 vs OLS collinearity narrative to the report file.
+
+    Shows the non-zero coefficient table for each track, cross-references the
+    highest-VIF feature from the VIF drop analysis, and explains how the L_1
+    penalty resolves the (X'X)^(-1) variance inflation that destabilises OLS.
+    """
+    import pandas as pd
+
+    def _coef_table(model, feat_names, label):
+        coefs   = pd.Series(model.coef_, index=feat_names)
+        nonzero = coefs[coefs != 0].sort_values(key=abs, ascending=False)
+        zero    = coefs[coefs == 0]
+        print(f"\n  {label}: {len(nonzero)}/{len(coefs)} features retained  "
+              f"(λ = {model.alpha:.5g})", file=f)
+        print(f"  {'Feature':<38}  {'β (Lasso)':>12}", file=f)
+        print(f"  {'-'*55}", file=f)
+        for feat, coef in nonzero.items():
+            print(f"  {feat:<38}  {coef:+12.4f}", file=f)
+        if len(zero):
+            print(f"  Zeroed-out ({len(zero)}):  {', '.join(zero.index.tolist())}", file=f)
+        return coefs
+
+    print(f"\n--- Lasso Contrast: L_1 Regularisation as Multicollinearity Resolution ---",
+          file=f)
+    print(f"  Objective: minimise  RSS(β) + λ·Σ|β_j|", file=f)
+    print(f"  The L_1 penalty shrinks redundant coefficients to exactly zero,", file=f)
+    print(f"  performing automated feature selection where OLS estimator variance explodes.", file=f)
+
+    coefs_a = _coef_table(fitted_a["Lasso"], X_ta.columns, "Track A")
+    if not single_track:
+        _coef_table(fitted_b["Lasso"], X_tb.columns, "Track B")
+
+    if vif_top_feature and vif_top_feature in coefs_a.index:
+        c = coefs_a[vif_top_feature]
+        verdict = (f"β = {c:+.4f}  (retained)"
+                   if c != 0 else "β = 0.0000  (eliminated by L_1 penalty)")
+        vif_str = f"{vif_top_vif:.2f}" if vif_top_vif and np.isfinite(vif_top_vif) else "inf"
+        print(f"\n  VIF cross-reference: '{vif_top_feature}' "
+              f"(highest VIF = {vif_str}) -> {verdict}", file=f)
+
+    print(f"\n  The L_1 constraint forces the optimiser to select at most one", file=f)
+    print(f"  predictor from a correlated group, resolving the (X'X)^(-1) variance", file=f)
+    print(f"  inflation that destabilises OLS where multicollinearity is present.", file=f)
+    print(f"  -> See Lasso_coefficients.png for the full sparse coefficient profile.", file=f)
+
 
 def print_header(text, file=None):
     """
@@ -102,9 +152,17 @@ def main(models=None, datasets=None):
 
             # 1. Load & Inspect
             print_header("1. Load & Inspect", file=f)
-            df_raw, df_clean, df_imp, df_drop = load_and_clean(
+            df_raw, df_clean, df_imp, df_drop, load_meta = load_and_clean(
                 data_path, cfg['target'], cfg['limits']
             )
+
+            # Dataset shape and row-drop summary (printed directly to report)
+            print(f"  Dataset:    {load_meta['n_raw']} rows × {load_meta['n_cols']} columns (raw)", file=f)
+            if load_meta['n_target_dropped'] > 0:
+                print(f"  Dropped:    {load_meta['n_target_dropped']} row(s) — missing target value", file=f)
+            if load_meta['n_domain_removed'] > 0:
+                print(f"  Dropped:    {load_meta['n_domain_removed']} row(s) — domain constraint violations", file=f)
+            print(f"  Clean base: {load_meta['n_cleaned']} rows\n", file=f)
 
             # Detect single-track mode early so EDA plots can use it.
             # When no rows were dropped (no missing values), both tracks are
@@ -120,12 +178,15 @@ def main(models=None, datasets=None):
                 if c != cfg['target']
             ]
             calculate_vif(df_clean, numeric_pred_cols)
+            vif_top_feature, vif_top_vif = vif_drop_analysis(df_clean, numeric_pred_cols)
             sys.stdout = old_stdout
 
             # EDA plots
             plot_exam_score_distribution(df_clean, cfg['target'], out_dir / "score_distribution.png")
+            print(f"  [Plot saved]  score_distribution.png", file=f)
             plot_correlation_with_target(df_imp, df_drop, cfg['target'], out_dir / "correlation.png",
                                          single_track=single_track)
+            print(f"  [Plot saved]  correlation.png", file=f)
 
             # 2. Summary
             print_header("2. Summary", file=f)
@@ -138,14 +199,42 @@ def main(models=None, datasets=None):
 
             # 3. Preprocessing & Encoding
             print_header("3. Preprocessing & Encoding", file=f)
-            X_ta, X_va, y_ta, y_va, log_target = preprocess_track(
+            X_ta, X_va, y_ta, y_va, log_target, prep_log_a = preprocess_track(
                 df_imp, requires_imputation=True, target=cfg['target']
             )
-            if log_target:
-                print(f"  [log transform] Target '{cfg['target']}' is right-skewed "
-                      f"— log(y+1) applied. Metrics reported in original scale.", file=f)
+
+            # Log transform decision
+            skew = prep_log_a["skewness"]
+            if prep_log_a["log_target"]:
+                print(f"  [Log Transform]  Train-set skewness = {skew:+.4f}  "
+                      f"(|skew| > {LOG_SKEWNESS_THRESHOLD}) -> np.log1p applied.", file=f)
+                print(f"                   Metrics and plots reported in original scale (np.expm1).", file=f)
+            else:
+                print(f"  [Log Transform]  Train-set skewness = {skew:+.4f}  "
+                      f"(|skew| ≤ {LOG_SKEWNESS_THRESHOLD}) -> no transformation.", file=f)
+
+            # Imputation
+            if prep_log_a["imputed_cols"]:
+                print(f"  [Imputation]     {len(prep_log_a['imputed_cols'])} column(s) with missing values"
+                      f" -> median (numeric) / mode (categorical) fill:", file=f)
+                print(f"                   {', '.join(prep_log_a['imputed_cols'])}", file=f)
+            else:
+                print(f"  [Imputation]     No missing values — no imputation required.", file=f)
+
+            # Encoding
+            if prep_log_a["encoded_cols"]:
+                print(f"  [Encoding]       {len(prep_log_a['encoded_cols'])} categorical column(s) -> "
+                      f"{prep_log_a['n_total_dummies']} dummy columns (one-hot, drop_first=True):", file=f)
+                print(f"                   {', '.join(prep_log_a['encoded_cols'])}", file=f)
+            else:
+                print(f"  [Encoding]       No categorical predictors.", file=f)
+
+            # Scaling
+            print(f"  [Scaling]        StandardScaler fitted on train fold only -> applied to test (no leakage).\n",
+                  file=f)
+
             if not single_track:
-                X_tb, X_vb, y_tb, y_vb, _ = preprocess_track(
+                X_tb, X_vb, y_tb, y_vb, _, _prep_log_b = preprocess_track(
                     df_drop, requires_imputation=False, target=cfg['target']
                 )
 
@@ -198,8 +287,8 @@ def main(models=None, datasets=None):
                 for name, model in models_to_run.items():
                     metrics, y_pred = get_metrics_and_preds(X_tr, y_tr, X_te, y_te, model)
                     results[name] = metrics
-                    preds[name]   = y_pred
-                    fitted[name]  = model
+                    preds[name] = y_pred
+                    fitted[name] = model
                     prefix = f"  {track_label}: " if track_label else "  "
                     print(f"{prefix}Fitted {name}", file=f)
                 print("\n", file=f)
@@ -214,8 +303,8 @@ def main(models=None, datasets=None):
             else:
                 results_b, preds_b, hist_b, fitted_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
 
-            # Back-transform log(y+1) predictions using expm1 for final metrics and plots.
-            # Ensures RMSE and R² are reported in the original target scale.
+            # Back-transform log(y+1) predictions using expm1 for final metrics and plots
+            # Ensures RMSE and R² are reported in the original target scale
             if log_target:
                 y_va_disp = np.expm1(y_va)
                 preds_a_disp = {n: np.expm1(p) for n, p in preds_a.items()}
@@ -239,22 +328,9 @@ def main(models=None, datasets=None):
                 y_va_disp, preds_a_disp = y_va, preds_a
                 y_vb_disp, preds_b_disp = y_vb, preds_b
 
-            print(f"Final Feature Count: {X_ta.shape[1]}", file=f)
+            print(f"Final Feature Count: {X_ta.shape[1]} \n", file=f)
 
             # Optimal hyperparameters — plain text to report, ANSI colour to terminal
-            if "DT (Optimal)" in fitted_a:
-                depth_a = fitted_a["DT (Optimal)"].max_depth
-                if single_track:
-                    print(f"Optimal DT depth — {depth_a}", file=f)
-                    sys.__stdout__.write(f"  Optimal DT depth — \033[34m{depth_a}\033[0m\n")
-                else:
-                    depth_b = fitted_b["DT (Optimal)"].max_depth
-                    print(f"Optimal DT depth — Track A: {depth_a},  Track B: {depth_b}", file=f)
-                    sys.__stdout__.write(
-                        f"  Optimal DT depth — \033[34mTrack A: {depth_a}\033[0m,"
-                        f"  \033[32mTrack B: {depth_b}\033[0m\n"
-                    )
-
             if "Lasso" in fitted_a:
                 alpha_a = fitted_a["Lasso"].alpha
                 if single_track:
@@ -266,6 +342,19 @@ def main(models=None, datasets=None):
                     sys.__stdout__.write(
                         f"  Optimal Lasso α  — \033[34mTrack A: {alpha_a:.4g}\033[0m,"
                         f"  \033[32mTrack B: {alpha_b:.4g}\033[0m\n"
+                    )
+
+            if "DT (Optimal)" in fitted_a:
+                depth_a = fitted_a["DT (Optimal)"].max_depth
+                if single_track:
+                    print(f"Optimal DT depth — {depth_a}", file=f)
+                    sys.__stdout__.write(f"  Optimal DT depth — \033[34m{depth_a}\033[0m\n")
+                else:
+                    depth_b = fitted_b["DT (Optimal)"].max_depth
+                    print(f"Optimal DT depth — Track A: {depth_a},  Track B: {depth_b}", file=f)
+                    sys.__stdout__.write(
+                        f"  Optimal DT depth — \033[34mTrack A: {depth_a}\033[0m,"
+                        f"  \033[32mTrack B: {depth_b}\033[0m\n"
                     )
 
             if "Random Forest" in fitted_a:
@@ -295,11 +384,13 @@ def main(models=None, datasets=None):
                                         out_dir / "Lasso_tuning.png",
                                         lr_rmse_a=lr_rmse_a, lr_rmse_b=lr_rmse_b,
                                         single_track=single_track)
-                            
+                print(f"  [Plot saved]  Lasso_tuning.png", file=f)
+
             if "DT" in hist_a:
                 plot_tuning_curve(hist_a["DT"], hist_b["DT"],
                                   out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b,
                                   single_track=single_track)
+                print(f"  [Plot saved]  DT_tuning.png", file=f)
 
             if "RF" in hist_a:
                 plot_tuning_curve(hist_a["RF"], hist_b["RF"],
@@ -307,6 +398,7 @@ def main(models=None, datasets=None):
                                   x_key="n_estimators", x_label="Number of Trees",
                                   suptitle="CV RMSE vs. Number of Trees  (10-fold CV)",
                                   single_track=single_track)
+                print(f"  [Plot saved]  RF_tuning.png", file=f)
 
             # Actual vs. predicted — one figure per fitted model
             for name in [m for m in model_list if m in preds_a_disp]:
@@ -316,6 +408,7 @@ def main(models=None, datasets=None):
                     name, out_dir / f"{clean}_actual_vs_pred.png",
                     single_track=single_track, target=cfg['target']
                 )
+                print(f"  [Plot saved]  {clean}_actual_vs_pred.png", file=f)
 
             # Residuals — drawn for fitted models among the standard candidates
             for name in [m for m in ["Linear Regression", "Lasso", "DT (Optimal)", "Random Forest"]
@@ -326,6 +419,7 @@ def main(models=None, datasets=None):
                     name, out_dir / f"{clean}_residuals.png",
                     single_track=single_track, target=cfg['target']
                 )
+                print(f"  [Plot saved]  {clean}_residuals.png", file=f)
 
             # Feature importances — only when the relevant model was fitted
             if "Lasso" in fitted_a:
@@ -335,7 +429,12 @@ def main(models=None, datasets=None):
                     out_dir / "Lasso_coefficients.png",
                     single_track=single_track
                 )
-            
+                print(f"  [Plot saved]  Lasso_coefficients.png", file=f)
+                _print_lasso_contrast(
+                    fitted_a, fitted_b, X_ta, X_tb,
+                    vif_top_feature, vif_top_vif, single_track, f
+                )
+
             if "DT (Optimal)" in fitted_a:
                 plot_feature_importance(
                     fitted_a["DT (Optimal)"], fitted_b["DT (Optimal)"],
@@ -343,6 +442,7 @@ def main(models=None, datasets=None):
                     out_dir / "DT_feature_importance.png",
                     single_track=single_track
                 )
+                print(f"  [Plot saved]  DT_feature_importance.png", file=f)
 
             if "Random Forest" in fitted_a:
                 plot_feature_importance(
@@ -351,6 +451,7 @@ def main(models=None, datasets=None):
                     out_dir / "RF_feature_importance.png",
                     model_name="Random Forest", single_track=single_track
                 )
+                print(f"  [Plot saved]  RF_feature_importance.png", file=f)
 
             # 5. Residual Normality Tests (Shapiro-Wilk)
             print_header("5. Residual Normality Tests", file=f)
@@ -396,4 +497,5 @@ def main(models=None, datasets=None):
 if __name__ == "__main__":
     # main(datasets = "winequality-red.csv")
     # main(datasets = {"StudentPerformanceFactors.csv", "Housing.csv"})
+    # main(datasets = "Housing.csv")
     main()
