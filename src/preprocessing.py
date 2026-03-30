@@ -45,6 +45,9 @@ def preprocess_track(df, target, requires_imputation=False):
                       When True the caller should back-transform predictions
                       with numpy.expm1 before computing reported metrics/plots.
                       X_test is locked — use X_train for all CV and tuning.
+    prep_log        : Dict with preprocessing decisions for report logging —
+                      skewness, log_target, imputed_cols, encoded_cols,
+                      n_total_dummies.
     """
     # 1. Split fitst (Fixes Leakage)
     train_df, test_df = train_test_split(
@@ -66,6 +69,10 @@ def preprocess_track(df, target, requires_imputation=False):
         y_test = np.log1p(y_test)
 
     # 3. Imputation (training stats only, applied to both splits)
+    imputed_cols = (
+        [col for col in X_train_raw.columns if X_train_raw[col].isna().any()]
+        if requires_imputation else []
+    )
     if requires_imputation:
         for col in X_train_raw.columns:
             if (X_train_raw[col].dtype == 'object'
@@ -76,9 +83,14 @@ def preprocess_track(df, target, requires_imputation=False):
             X_train_raw[col] = X_train_raw[col].fillna(fill_val)
             X_test_raw[col]  = X_test_raw[col].fillna(fill_val)
 
-    # 4. One-hot encoding + column alignment 
+    # 4. One-hot encoding + column alignment
+    cat_cols_original = list(
+        X_train_raw.select_dtypes(include=['object', 'category']).columns
+    )
     X_train_enc = pd.get_dummies(X_train_raw, drop_first=True)
-    X_test_enc = pd.get_dummies(X_test_raw, drop_first=True)
+    X_test_enc  = pd.get_dummies(X_test_raw,  drop_first=True)
+    # Net column change after encoding: total dummy cols minus original cat cols
+    n_total_dummies = X_train_enc.shape[1] - (X_train_raw.shape[1] - len(cat_cols_original))
 
     # Align test to training columns (left join):
     #   - test category unseen in train -> dropped
@@ -88,8 +100,8 @@ def preprocess_track(df, target, requires_imputation=False):
     )
 
     # 5. Feature scaling (fit on training set only)
-    # Scale features (mean=0, var=1) on training set. Essential for Lasso/Linear 
-    # Regression; optional for scale-invariant tree models (DT/RF).
+    # Scale features (mean=0, var=1) on training set. Essential for Lasso/Linear Regression; 
+    # optional for scale-invariant tree models (DT/RF).
     scaler = StandardScaler()
     X_train = pd.DataFrame(
         scaler.fit_transform(X_train_aligned),
@@ -103,4 +115,11 @@ def preprocess_track(df, target, requires_imputation=False):
     )
 
     # X_test is locked — all CV and tuning use X_train only
-    return X_train, X_test, y_train, y_test, log_target
+    prep_log = {
+        "skewness":        train_skewness,
+        "log_target":      log_target,
+        "imputed_cols":    imputed_cols,
+        "encoded_cols":    cat_cols_original,
+        "n_total_dummies": n_total_dummies,
+    }
+    return X_train, X_test, y_train, y_test, log_target, prep_log
