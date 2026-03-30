@@ -39,8 +39,18 @@ Processing Dataset: StudentPerformanceFactors.csv=
   Parental_Education_Level: College, High School, Postgraduate
   Distance_from_Home: Far, Moderate, Near
   Gender: Female, Male
-Schema confirmed. Proceeding...
 
+--- VIF (Variance Inflation Factor, n=6606 complete cases) ---
+  Feature                                     VIF  Note
+  ------------------------------------------------------------
+  Attendance                                28.61  [SEVERE]   VIF >= 10
+  Previous_Scores                           21.52  [SEVERE]   VIF >= 10
+  Sleep_Hours                               19.14  [SEVERE]   VIF >= 10
+  Hours_Studied                             11.12  [SEVERE]   VIF >= 10
+  Physical_Activity                          8.59  [moderate] VIF >= 5
+  Tutoring_Sessions                          2.45  
+
+  [VIF > 5 = moderate collinearity;  VIF > 10 = severe]
 
 ==================================================
 ====================2. Summary====================
@@ -54,6 +64,7 @@ Track B (Dropped): 6377 rows
 ===========3. Preprocessing & Encoding============
 ==================================================
 
+  [log transform] Target 'Exam_Score' is right-skewed — log(y+1) applied. Metrics reported in original scale.
   Track A: Fitted Null Model
   Track A: Fitted Linear Regression
   Track A: Fitted Lasso
@@ -73,8 +84,8 @@ Track B (Dropped): 6377 rows
 
 
 Final Feature Count: 27
-Optimal DT depth — Track A: 3,  Track B: 2
-Optimal Lasso α  — Track A: 0.2812,  Track B: 0.2812
+Optimal DT depth — Track A: 3,  Track B: 3
+Optimal Lasso α  — Track A: 0.003237,  Track B: 0.003237
 Optimal n_estimators — Track A: 10,  Track B: 10
 
 ==================================================
@@ -82,12 +93,40 @@ Optimal n_estimators — Track A: 10,  Track B: 10
 ==================================================
 
 
+==================================================
+===========5. Residual Normality Tests============
+==================================================
+
+
+--- Shapiro-Wilk Residual Normality Test ---
+  (H_0: residuals are normally distributed  |  α = 0.05)
+
+  Model                     W (A)      p (A)     W (B)      p (B)           A           B
+  ----------------------------------------------------------------------------------
+  Null Model               0.9396     0.0000    0.8750     0.0000  Non-normal  Non-normal
+  Linear Regression        0.1730     0.0000    0.1549     0.0000  Non-normal  Non-normal
+  Lasso                    0.5705     0.0000    0.4861     0.0000  Non-normal  Non-normal
+  DT (Depth 3)             0.8332     0.0000    0.7401     0.0000  Non-normal  Non-normal
+  DT (Unconstrained)       0.5674     0.0000    0.6223     0.0000  Non-normal  Non-normal
+  DT (Optimal)             0.8332     0.0000    0.7401     0.0000  Non-normal  Non-normal
+  Random Forest            0.6687     0.0000    0.5655     0.0000  Non-normal  Non-normal
+
+  [Normality of residuals is a key assumption for Linear Regression and Lasso;
+   tree-based models make no such assumption.]
+
+--- Shapiro-Wilk Test: Linear Regression Residuals ---
+  (H_0: residuals are normally distributed  |  Pass if p > 0.05)
+  Note: Residuals in log-scale (model fitting scale, before back-transform).
+  ------------------------------------------------------------
+  Track A (Imputed)   W = 0.2052   p-value = 0.0000   [Fail]
+  Track B (Dropped)   W = 0.1837   p-value = 0.0000   [Fail]
+
 Final Model Comparison (Strict 80/20 Test Evaluation):
              Model Track A (RMSE) Track A R² Track B (RMSE) Track B R²
-        Null Model         3.6401    -0.0020         3.9566    -0.0001
- Linear Regression         1.5213     0.8250         2.0410     0.7339
-             Lasso         1.9995     0.6977         2.4719     0.6097
-      DT (Depth 3)         2.5644     0.5027         3.0075     0.4222
-DT (Unconstrained)         3.6705    -0.0188         3.6521     0.1479
-      DT (Optimal)         2.5644     0.5027         3.1437     0.3687
-     Random Forest         2.1894     0.6375         2.5207     0.5941
+        Null Model         3.6369    -0.0002         3.9589    -0.0012
+ Linear Regression         1.5203     0.8252         2.0410     0.7339
+             Lasso         1.8752     0.7341         2.3661     0.6424
+      DT (Depth 3)         2.5613     0.5039         3.0082     0.4219
+DT (Unconstrained)         4.0110    -0.2165         3.3309     0.2912
+      DT (Optimal)         2.5613     0.5039         3.0082     0.4219
+     Random Forest         2.1918     0.6367         2.5120     0.5969

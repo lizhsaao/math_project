@@ -29,8 +29,17 @@
   airconditioning: no, yes
   prefarea: no, yes
   furnishingstatus: furnished, semi-furnished, unfurnished
-Schema confirmed. Proceeding...
 
+--- VIF (Variance Inflation Factor, n=545 complete cases) ---
+  Feature                                     VIF  Note
+  ------------------------------------------------------------
+  bedrooms                                  13.65  [SEVERE]   VIF >= 10
+  bathrooms                                  9.16  [moderate] VIF >= 5
+  area                                       6.74  [moderate] VIF >= 5
+  stories                                    6.68  [moderate] VIF >= 5
+  parking                                    1.90  
+
+  [VIF > 5 = moderate collinearity;  VIF > 10 = severe]
 
 ==================================================
 ====================2. Summary====================
@@ -43,6 +52,7 @@ Rows: 545 (no missing values — single-track mode)
 ===========3. Preprocessing & Encoding============
 ==================================================
 
+  [log transform] Target 'price' is right-skewed — log(y+1) applied. Metrics reported in original scale.
   Fitted Null Model
   Fitted Linear Regression
   Fitted Lasso
@@ -53,8 +63,8 @@ Rows: 545 (no missing values — single-track mode)
 
 
 Final Feature Count: 13
-Optimal DT depth — 2
-Optimal Lasso α  — 100
+Optimal DT depth — 3
+Optimal Lasso α  — 0.04292
 Optimal n_estimators — 10
 
 ==================================================
@@ -62,12 +72,39 @@ Optimal n_estimators — 10
 ==================================================
 
 
+==================================================
+===========5. Residual Normality Tests============
+==================================================
+
+
+--- Shapiro-Wilk Residual Normality Test ---
+  (H_0: residuals are normally distributed  |  α = 0.05)
+
+  Model                         W     p-value        Result
+  ----------------------------------------------------------
+  Null Model               0.9269      0.0000    Non-normal
+  Linear Regression        0.9273      0.0000    Non-normal
+  Lasso                    0.9173      0.0000    Non-normal
+  DT (Depth 3)             0.9311      0.0000    Non-normal
+  DT (Unconstrained)       0.9721      0.0219    Non-normal
+  DT (Optimal)             0.9311      0.0000    Non-normal
+  Random Forest            0.9671      0.0085    Non-normal
+
+  [Normality of residuals is a key assumption for Linear Regression and Lasso;
+   tree-based models make no such assumption.]
+
+--- Shapiro-Wilk Test: Linear Regression Residuals ---
+  (H_0: residuals are normally distributed  |  Pass if p > 0.05)
+  Note: Residuals in log-scale (model fitting scale, before back-transform).
+  ------------------------------------------------------------
+  All Data            W = 0.9926   p-value = 0.8272   [Pass]
+
 Final Model Comparison (Strict 80/20 Test Evaluation):
              Model         RMSE      R²
-        Null Model 2268298.2282 -0.0179
- Linear Regression 1324506.9601  0.6529
-             Lasso 1324556.3615  0.6529
-      DT (Depth 3) 1775612.1814  0.3762
-DT (Unconstrained) 1625669.9043  0.4771
-      DT (Optimal) 1783333.6470  0.3708
-     Random Forest 1363585.4857  0.6321
+        Null Model 2324389.0080 -0.0689
+ Linear Regression 1314648.1954  0.6581
+             Lasso 1553023.5170  0.5228
+      DT (Depth 3) 1751131.4767  0.3933
+DT (Unconstrained) 1626808.2944  0.4764
+      DT (Optimal) 1751131.4767  0.3933
+     Random Forest 1450848.8884  0.5836
