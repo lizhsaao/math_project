@@ -20,23 +20,45 @@ def _save(fig, output_path):
     plt.close(fig)
 
 
-def plot_exam_score_distribution(df, target, output_path):
+def plot_exam_score_distribution(df, target, output_path, bin_strategy="fd"):
     """
     Histogram of the target variable with a Normal distribution overlay.
 
     Parameters
     ----------
-    df          : DataFrame containing the target column.
-    target      : Name of the target/response variable column.
-    output_path : File path to save the figure.
+    df           : DataFrame containing the target column.
+    target       : Name of the target/response variable column.
+    output_path  : File path to save the figure.
+    bin_strategy : How to compute histogram bins:
+                   "unit"    — width-1 integer bins (0–100); exposes grade-boundary spikes.
+                   "integer" — half-integer edges centred on each discrete integer value.
+                   "fd"      — Freedman-Diaconis rule: bin_width = 2·IQR·n^(-1/3);
+                               robust to outliers in skewed continuous distributions.
     """
-    mu  = df[target].mean()
-    sig = df[target].std()
+    data = df[target].dropna()
+
+    if bin_strategy == "unit":
+        lo, hi = int(data.min()), int(data.max())
+        bins = range(lo, hi + 2)          # +2 so the last bar is fully drawn
+
+    elif bin_strategy == "integer":
+        bins = np.arange(data.min() - 0.5, data.max() + 1.5, 1.0)
+
+    else:  # "fd" — Freedman-Diaconis
+        iqr = np.percentile(data, 75) - np.percentile(data, 25)
+        if iqr == 0:
+            bins = 20
+        else:
+            bin_width = 2 * iqr * len(data) ** (-1 / 3)
+            bins = max(5, int(np.ceil((data.max() - data.min()) / bin_width)))
+
+    mu  = data.mean()
+    sig = data.std()
     x   = np.linspace(mu - 4 * sig, mu + 4 * sig, 300)
     pdf = (1 / (sig * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mu) / sig) ** 2)
 
     fig, ax = subplots(figsize=(7, 4))
-    ax.hist(df[target], bins=20, density=True,
+    ax.hist(data, bins=bins, density=True,
             color=_COL_A, alpha=0.7, edgecolor="white", label="Observed")
     ax.plot(x, pdf, "r-", linewidth=2,
             label=f"Normal fit (μ = {mu:.2f}, σ = {sig:.2f})")

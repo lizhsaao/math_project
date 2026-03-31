@@ -62,7 +62,7 @@ Schema confirmed. Proceeding...
   Removing a single predictor shifted the VIF of 4/4 remaining feature(s).
   High VIF inflates Var(β^) ∝ (X'X)^(-1): correlated predictors share explanatory
   power, making OLS coefficients sensitive to small perturbations in X.
-  -> See Lasso Contrast in Section 4 for how L₁ regularisation resolves this.
+  -> See Lasso Contrast in Section 4 for how L_1 regularisation resolves this.
   [Plot saved]  score_distribution.png
   [Plot saved]  correlation.png
 

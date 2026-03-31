@@ -182,7 +182,8 @@ def main(models=None, datasets=None):
             sys.stdout = old_stdout
 
             # EDA plots
-            plot_exam_score_distribution(df_clean, cfg['target'], out_dir / "score_distribution.png")
+            plot_exam_score_distribution(df_clean, cfg['target'], out_dir / "score_distribution.png",
+                                         bin_strategy=cfg.get('bin_strategy', 'fd'))
             print(f"  [Plot saved]  score_distribution.png", file=f)
             plot_correlation_with_target(df_imp, df_drop, cfg['target'], out_dir / "correlation.png",
                                          single_track=single_track)

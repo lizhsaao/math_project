@@ -17,6 +17,7 @@ RESULTS_DIR.mkdir(exist_ok=True)
 DATASET_CONFIGS = {
     "StudentPerformanceFactors.csv": {
         "target": "Exam_Score",
+        "bin_strategy": "unit",
         "limits": {
             # Target Limit
             "Exam_Score": (100, "Score > 100"),
@@ -31,6 +32,7 @@ DATASET_CONFIGS = {
     },
     "Housing.csv": {
         "target": "price",
+        "bin_strategy": "fd",
         "limits": {
             "bedrooms": (10, "Bedrooms > 10"),
             "bathrooms": (10, "Bathrooms > 10"),
@@ -40,6 +42,7 @@ DATASET_CONFIGS = {
     },
     "winequality-red.csv": {
         "target": "quality",
+        "bin_strategy": "integer",
         "limits": {
             # Target: Score is 0-10
             "quality": (10, "Quality Score > 10"),
