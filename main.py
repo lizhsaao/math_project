@@ -41,7 +41,7 @@ class Tee:
             s.flush()
 
 def _print_lasso_contrast(fitted_a, fitted_b, X_ta, X_tb,
-                           vif_top_feature, vif_top_vif, single_track, f):
+                           vif_top_feature, vif_top_vif, single_track, f, tag=""):
     """
     Prints a Lasso L_1 vs OLS collinearity narrative to the report file.
 
@@ -86,7 +86,8 @@ def _print_lasso_contrast(fitted_a, fitted_b, X_ta, X_tb,
     print(f"\n  The L_1 constraint forces the optimiser to select at most one", file=f)
     print(f"  predictor from a correlated group, resolving the (X'X)^(-1) variance", file=f)
     print(f"  inflation that destabilises OLS where multicollinearity is present.", file=f)
-    print(f"  -> See Lasso_coefficients.png for the full sparse coefficient profile.", file=f)
+    suffix = f"_{tag}" if tag else ""
+    print(f"  -> See Lasso_coefficients{suffix}.png for the full sparse coefficient profile.", file=f)
 
 
 def print_header(text, file=None):
@@ -145,7 +146,8 @@ def main(models=None, datasets=None):
         # One subdirectory per dataset (e.g., results/StudentPerformanceFactors/)
         out_dir = RESULTS_DIR / filename.split('.')[0]
         out_dir.mkdir(parents=True, exist_ok=True)
-        report_path = out_dir / "report.txt"
+        tag = filename.split('.')[0]   # e.g. "StudentPerformanceFactors", "Housing", "winequality-red"
+        report_path = out_dir / f"report_{tag}.txt"
 
         with open(report_path, "w") as f:
             print_header(f"Processing Dataset: {filename}", file=f)
@@ -182,12 +184,12 @@ def main(models=None, datasets=None):
             sys.stdout = old_stdout
 
             # EDA plots
-            plot_exam_score_distribution(df_clean, cfg['target'], out_dir / "score_distribution.png",
+            plot_exam_score_distribution(df_clean, cfg['target'], out_dir / f"score_distribution_{tag}.png",
                                          bin_strategy=cfg.get('bin_strategy', 'fd'))
-            print(f"  [Plot saved]  score_distribution.png", file=f)
-            plot_correlation_with_target(df_imp, df_drop, cfg['target'], out_dir / "correlation.png",
+            print(f"  [Plot saved]  score_distribution_{tag}.png", file=f)
+            plot_correlation_with_target(df_imp, df_drop, cfg['target'], out_dir / f"correlation_{tag}.png",
                                          single_track=single_track)
-            print(f"  [Plot saved]  correlation.png", file=f)
+            print(f"  [Plot saved]  correlation_{tag}.png", file=f)
 
             # 2. Summary
             print_header("2. Summary", file=f)
@@ -382,34 +384,34 @@ def main(models=None, datasets=None):
             # Tuning curves — only drawn when the corresponding tuning was performed
             if "Lasso" in hist_a:
                 plot_lasso_tuning_curve(hist_a["Lasso"], hist_b["Lasso"],
-                                        out_dir / "Lasso_tuning.png",
+                                        out_dir / f"Lasso_tuning_{tag}.png",
                                         lr_rmse_a=lr_rmse_a, lr_rmse_b=lr_rmse_b,
                                         single_track=single_track)
-                print(f"  [Plot saved]  Lasso_tuning.png", file=f)
+                print(f"  [Plot saved]  Lasso_tuning_{tag}.png", file=f)
 
             if "DT" in hist_a:
                 plot_tuning_curve(hist_a["DT"], hist_b["DT"],
-                                  out_dir / "DT_tuning.png", lr_rmse_a, lr_rmse_b,
+                                  out_dir / f"DT_tuning_{tag}.png", lr_rmse_a, lr_rmse_b,
                                   single_track=single_track)
-                print(f"  [Plot saved]  DT_tuning.png", file=f)
+                print(f"  [Plot saved]  DT_tuning_{tag}.png", file=f)
 
             if "RF" in hist_a:
                 plot_tuning_curve(hist_a["RF"], hist_b["RF"],
-                                  out_dir / "RF_tuning.png", lr_rmse_a, lr_rmse_b,
+                                  out_dir / f"RF_tuning_{tag}.png", lr_rmse_a, lr_rmse_b,
                                   x_key="n_estimators", x_label="Number of Trees",
                                   suptitle="CV RMSE vs. Number of Trees  (10-fold CV)",
                                   single_track=single_track)
-                print(f"  [Plot saved]  RF_tuning.png", file=f)
+                print(f"  [Plot saved]  RF_tuning_{tag}.png", file=f)
 
             # Actual vs. predicted — one figure per fitted model
             for name in [m for m in model_list if m in preds_a_disp]:
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_actual_vs_predicted(
                     y_va_disp, preds_a_disp[name], y_vb_disp, preds_b_disp[name],
-                    name, out_dir / f"{clean}_actual_vs_pred.png",
+                    name, out_dir / f"{clean}_actual_vs_pred_{tag}.png",
                     single_track=single_track, target=cfg['target']
                 )
-                print(f"  [Plot saved]  {clean}_actual_vs_pred.png", file=f)
+                print(f"  [Plot saved]  {clean}_actual_vs_pred_{tag}.png", file=f)
 
             # Residuals — drawn for fitted models among the standard candidates
             for name in [m for m in ["Linear Regression", "Lasso", "DT (Optimal)", "Random Forest"]
@@ -417,42 +419,42 @@ def main(models=None, datasets=None):
                 clean = name.replace(" ", "_").replace("(", "").replace(")", "")
                 plot_residuals(
                     y_va_disp, preds_a_disp[name], y_vb_disp, preds_b_disp[name],
-                    name, out_dir / f"{clean}_residuals.png",
+                    name, out_dir / f"{clean}_residuals_{tag}.png",
                     single_track=single_track, target=cfg['target']
                 )
-                print(f"  [Plot saved]  {clean}_residuals.png", file=f)
+                print(f"  [Plot saved]  {clean}_residuals_{tag}.png", file=f)
 
             # Feature importances — only when the relevant model was fitted
             if "Lasso" in fitted_a:
                 plot_lasso_coefficients(
                     fitted_a["Lasso"], fitted_b["Lasso"],
                     X_ta.columns, X_tb.columns,
-                    out_dir / "Lasso_coefficients.png",
+                    out_dir / f"Lasso_coefficients_{tag}.png",
                     single_track=single_track
                 )
-                print(f"  [Plot saved]  Lasso_coefficients.png", file=f)
+                print(f"  [Plot saved]  Lasso_coefficients_{tag}.png", file=f)
                 _print_lasso_contrast(
                     fitted_a, fitted_b, X_ta, X_tb,
-                    vif_top_feature, vif_top_vif, single_track, f
+                    vif_top_feature, vif_top_vif, single_track, f, tag
                 )
 
             if "DT (Optimal)" in fitted_a:
                 plot_feature_importance(
                     fitted_a["DT (Optimal)"], fitted_b["DT (Optimal)"],
                     X_ta.columns, X_tb.columns,
-                    out_dir / "DT_feature_importance.png",
+                    out_dir / f"DT_feature_importance_{tag}.png",
                     single_track=single_track
                 )
-                print(f"  [Plot saved]  DT_feature_importance.png", file=f)
+                print(f"  [Plot saved]  DT_feature_importance_{tag}.png", file=f)
 
             if "Random Forest" in fitted_a:
                 plot_feature_importance(
                     fitted_a["Random Forest"], fitted_b["Random Forest"],
                     X_ta.columns, X_tb.columns,
-                    out_dir / "RF_feature_importance.png",
+                    out_dir / f"RF_feature_importance_{tag}.png",
                     model_name="Random Forest", single_track=single_track
                 )
-                print(f"  [Plot saved]  RF_feature_importance.png", file=f)
+                print(f"  [Plot saved]  RF_feature_importance_{tag}.png", file=f)
 
             # 5. Residual Normality Tests (Shapiro-Wilk)
             print_header("5. Residual Normality Tests", file=f)

@@ -76,8 +76,8 @@ Schema confirmed. Proceeding...
   High VIF inflates Var(β^) ∝ (X'X)^(-1): correlated predictors share explanatory
   power, making OLS coefficients sensitive to small perturbations in X.
   -> See Lasso Contrast in Section 4 for how L_1 regularisation resolves this.
-  [Plot saved]  score_distribution.png
-  [Plot saved]  correlation.png
+  [Plot saved]  score_distribution_winequality-red.png
+  [Plot saved]  correlation_winequality-red.png
 
 ==================================================
 ====================2. Summary====================
@@ -114,21 +114,21 @@ Optimal n_estimators — 10
 =======4. Model Evaluation & Visualisation========
 ==================================================
 
-  [Plot saved]  Lasso_tuning.png
-  [Plot saved]  DT_tuning.png
-  [Plot saved]  RF_tuning.png
-  [Plot saved]  Null_Model_actual_vs_pred.png
-  [Plot saved]  Linear_Regression_actual_vs_pred.png
-  [Plot saved]  Lasso_actual_vs_pred.png
-  [Plot saved]  DT_Depth_3_actual_vs_pred.png
-  [Plot saved]  DT_Unconstrained_actual_vs_pred.png
-  [Plot saved]  DT_Optimal_actual_vs_pred.png
-  [Plot saved]  Random_Forest_actual_vs_pred.png
-  [Plot saved]  Linear_Regression_residuals.png
-  [Plot saved]  Lasso_residuals.png
-  [Plot saved]  DT_Optimal_residuals.png
-  [Plot saved]  Random_Forest_residuals.png
-  [Plot saved]  Lasso_coefficients.png
+  [Plot saved]  Lasso_tuning_winequality-red.png
+  [Plot saved]  DT_tuning_winequality-red.png
+  [Plot saved]  RF_tuning_winequality-red.png
+  [Plot saved]  Null_Model_actual_vs_pred_winequality-red.png
+  [Plot saved]  Linear_Regression_actual_vs_pred_winequality-red.png
+  [Plot saved]  Lasso_actual_vs_pred_winequality-red.png
+  [Plot saved]  DT_Depth_3_actual_vs_pred_winequality-red.png
+  [Plot saved]  DT_Unconstrained_actual_vs_pred_winequality-red.png
+  [Plot saved]  DT_Optimal_actual_vs_pred_winequality-red.png
+  [Plot saved]  Random_Forest_actual_vs_pred_winequality-red.png
+  [Plot saved]  Linear_Regression_residuals_winequality-red.png
+  [Plot saved]  Lasso_residuals_winequality-red.png
+  [Plot saved]  DT_Optimal_residuals_winequality-red.png
+  [Plot saved]  Random_Forest_residuals_winequality-red.png
+  [Plot saved]  Lasso_coefficients_winequality-red.png
 
 --- Lasso Contrast: L_1 Regularisation as Multicollinearity Resolution ---
   Objective: minimise  RSS(β) + λ·Σ|β_j|
@@ -148,9 +148,9 @@ Optimal n_estimators — 10
   The L_1 constraint forces the optimiser to select at most one
   predictor from a correlated group, resolving the (X'X)^(-1) variance
   inflation that destabilises OLS where multicollinearity is present.
-  -> See Lasso_coefficients.png for the full sparse coefficient profile.
-  [Plot saved]  DT_feature_importance.png
-  [Plot saved]  RF_feature_importance.png
+  -> See Lasso_coefficients_winequality-red.png for the full sparse coefficient profile.
+  [Plot saved]  DT_feature_importance_winequality-red.png
+  [Plot saved]  RF_feature_importance_winequality-red.png
 
 ==================================================
 ===========5. Residual Normality Tests============
