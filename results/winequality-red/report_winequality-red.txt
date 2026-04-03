@@ -153,30 +153,38 @@ Optimal n_estimators — 10
   [Plot saved]  RF_feature_importance_winequality-red.png
 
 ==================================================
-===========5. Residual Normality Tests============
+========5. Residual Normality Diagnostics=========
 ==================================================
 
 
---- Shapiro-Wilk Residual Normality Test ---
-  (H_0: residuals are normally distributed  |  α = 0.05)
+--- Residual Normality Diagnostics ---
+  Normality is assessed via visual inspection of Q-Q plots and histograms.
+  Skewness/Kurtosis values quantify the extent of departure from normality.
+  Reference: Skewness ≈ 0 (symmetric), Excess Kurtosis ≈ 0 (mesokurtic).
 
-  Model                         W     p-value        Result
-  ----------------------------------------------------------
-  Null Model               0.8597      0.0000    Non-normal
-  Linear Regression        0.9934      0.1706        Normal
-  Lasso                    0.9813      0.0004    Non-normal
-  DT (Depth 3)             0.9799      0.0002    Non-normal
-  DT (Unconstrained)       0.8313      0.0000    Non-normal
-  DT (Optimal)             0.9419      0.0000    Non-normal
-  Random Forest            0.9901      0.0297    Non-normal
+  Model                   Skewness   Ex. Kurtosis
+  ------------------------------------------------
+  Null Model               +0.3154        +0.1814
+  Linear Regression        -0.0227        +0.0457
+  Lasso                    +0.1651        +0.0358
+  DT (Depth 3)             -0.0829        +0.3703
+  DT (Unconstrained)       +0.2209        +1.9514
+  DT (Optimal)             -0.1470        +0.6376
+  Random Forest            -0.1455        +0.5752
 
   [Normality of residuals is a key assumption for Linear Regression and Lasso;
    tree-based models make no such assumption.]
+  [Plot saved]  Linear_Regression_normality_winequality-red.png
+  [Plot saved]  Lasso_normality_winequality-red.png
+  [Plot saved]  DT_Optimal_normality_winequality-red.png
+  [Plot saved]  Random_Forest_normality_winequality-red.png
 
---- Shapiro-Wilk Test: Linear Regression Residuals ---
-  (H_0: residuals are normally distributed  |  Pass if p > 0.05)
-  ------------------------------------------------------------
-  All Data            W = 0.9934   p-value = 0.1706   [Pass]
+==================================================
+===========6. Residual Outlier Profile============
+==================================================
+
+
+  No categorical predictors — outlier profile skipped.
 
 Final Model Comparison (Strict 80/20 Test Evaluation):
              Model   RMSE      R²

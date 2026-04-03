@@ -150,31 +150,85 @@ Optimal n_estimators — 10
   [Plot saved]  RF_feature_importance_Housing.png
 
 ==================================================
-===========5. Residual Normality Tests============
+========5. Residual Normality Diagnostics=========
 ==================================================
 
 
---- Shapiro-Wilk Residual Normality Test ---
-  (H_0: residuals are normally distributed  |  α = 0.05)
+--- Residual Normality Diagnostics ---
+  Normality is assessed via visual inspection of Q-Q plots and histograms.
+  Skewness/Kurtosis values quantify the extent of departure from normality.
+  Reference: Skewness ≈ 0 (symmetric), Excess Kurtosis ≈ 0 (mesokurtic).
 
-  Model                         W     p-value        Result
-  ----------------------------------------------------------
-  Null Model               0.9269      0.0000    Non-normal
-  Linear Regression        0.9273      0.0000    Non-normal
-  Lasso                    0.9173      0.0000    Non-normal
-  DT (Depth 3)             0.9311      0.0000    Non-normal
-  DT (Unconstrained)       0.9721      0.0219    Non-normal
-  DT (Optimal)             0.9311      0.0000    Non-normal
-  Random Forest            0.9671      0.0085    Non-normal
+  Model                   Skewness   Ex. Kurtosis
+  ------------------------------------------------
+  Null Model               +1.0841        +1.4432
+  Linear Regression        +1.1778        +2.0176
+  Lasso                    +1.2862        +2.4042
+  DT (Depth 3)             +0.9685        +2.1563
+  DT (Unconstrained)       +0.3381        +1.2841
+  DT (Optimal)             +0.9685        +2.1563
+  Random Forest            +0.7425        +1.0238
 
   [Normality of residuals is a key assumption for Linear Regression and Lasso;
    tree-based models make no such assumption.]
+  [Plot saved]  Linear_Regression_normality_Housing.png
+  [Plot saved]  Lasso_normality_Housing.png
+  [Plot saved]  DT_Optimal_normality_Housing.png
+  [Plot saved]  Random_Forest_normality_Housing.png
 
---- Shapiro-Wilk Test: Linear Regression Residuals ---
-  (H_0: residuals are normally distributed  |  Pass if p > 0.05)
-  Note: Residuals in log-scale (model fitting scale, before back-transform).
-  ------------------------------------------------------------
-  All Data            W = 0.9926   p-value = 0.8272   [Pass]
+==================================================
+===========6. Residual Outlier Profile============
+==================================================
+
+
+--- Residual Outlier Profile — Linear Regression ---
+  Top 5% absolute errors: 6 / 109 test observations  (AE ≥ 2.698e+06)
+  Δ = (outlier freq) − (population freq)   [positive Δ = over-represented in worst predictions]
+
+  mainroad:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              13.8       0.0    -13.8  ◄
+  yes                             86.2     100.0    +13.8  ◄
+
+  guestroom:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              82.6      66.7    -15.9  ◄
+  yes                             17.4      33.3    +15.9  ◄
+
+  basement:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              67.9      50.0    -17.9  ◄
+  yes                             32.1      50.0    +17.9  ◄
+
+  hotwaterheating:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  yes                              2.8       0.0     -2.8
+  no                              97.2     100.0     +2.8
+
+  airconditioning:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              65.1      33.3    -31.8  ◄
+  yes                             34.9      66.7    +31.8  ◄
+
+  prefarea:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              76.1      66.7     -9.5  ◄
+  yes                             23.9      33.3     +9.5  ◄
+
+  furnishingstatus:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  furnished                       26.6      50.0    +23.4  ◄
+  unfurnished                     37.6      16.7    -20.9  ◄
+  semi-furnished                  35.8      33.3     -2.4
+
+  [Plot saved]  outlier_profile_Housing.png
 
 Final Model Comparison (Strict 80/20 Test Evaluation):
              Model         RMSE      R²
