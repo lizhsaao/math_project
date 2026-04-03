@@ -153,9 +153,11 @@ def main(models=None, datasets=None):
 
         with open(report_path, "w") as f:
             print_header(f"Processing Dataset: {filename}", file=f)
+            sys.__stdout__.write(f"\n{filename}\n")
 
             # 1. Load & Inspect
             print_header("1. Load & Inspect", file=f)
+            sys.__stdout__.write("  1. Load & Inspect\n")
             df_raw, df_clean, df_imp, df_drop, load_meta = load_and_clean(
                 data_path, cfg['target'], cfg['limits']
             )
@@ -173,9 +175,9 @@ def main(models=None, datasets=None):
             # identical — run only one.
             single_track = df_imp.shape[0] == df_drop.shape[0]
 
-            # Tee stdout -> terminal + report file so inspection output is visible
+            # Redirect stdout -> report file only (terminal shows progress lines)
             old_stdout = sys.stdout
-            sys.stdout = Tee(sys.__stdout__, f)
+            sys.stdout = f
             inspect_data(df_raw, cfg['target'], cfg['limits'])
             numeric_pred_cols = [
                 c for c in df_clean.select_dtypes(include=[np.number]).columns
@@ -195,6 +197,7 @@ def main(models=None, datasets=None):
 
             # 2. Summary
             print_header("2. Summary", file=f)
+            sys.__stdout__.write("  2. Summary\n")
             print(f"Cleaned Base: {df_clean.shape[0]} rows", file=f)
             if single_track:
                 print(f"Rows: {df_imp.shape[0]} (no missing values — single-track mode)", file=f)
@@ -204,6 +207,7 @@ def main(models=None, datasets=None):
 
             # 3. Preprocessing & Encoding
             print_header("3. Preprocessing & Encoding", file=f)
+            sys.__stdout__.write("  3. Preprocessing & Encoding\n")
             X_ta, X_va, y_ta, y_va, log_target, prep_log_a = preprocess_track(
                 df_imp, requires_imputation=True, target=cfg['target']
             )
@@ -335,48 +339,34 @@ def main(models=None, datasets=None):
 
             print(f"Final Feature Count: {X_ta.shape[1]} \n", file=f)
 
-            # Optimal hyperparameters — plain text to report, ANSI colour to terminal
+            # Optimal hyperparameters
             if "Lasso" in fitted_a:
                 alpha_a = fitted_a["Lasso"].alpha
                 if single_track:
                     print(f"Optimal Lasso α  — {alpha_a:.4g}", file=f)
-                    sys.__stdout__.write(f"  Optimal Lasso α  — \033[34m{alpha_a:.4g}\033[0m\n")
                 else:
                     alpha_b = fitted_b["Lasso"].alpha
                     print(f"Optimal Lasso α  — Track A: {alpha_a:.4g},  Track B: {alpha_b:.4g}", file=f)
-                    sys.__stdout__.write(
-                        f"  Optimal Lasso α  — \033[34mTrack A: {alpha_a:.4g}\033[0m,"
-                        f"  \033[32mTrack B: {alpha_b:.4g}\033[0m\n"
-                    )
 
             if "DT (Optimal)" in fitted_a:
                 depth_a = fitted_a["DT (Optimal)"].max_depth
                 if single_track:
                     print(f"Optimal DT depth — {depth_a}", file=f)
-                    sys.__stdout__.write(f"  Optimal DT depth — \033[34m{depth_a}\033[0m\n")
                 else:
                     depth_b = fitted_b["DT (Optimal)"].max_depth
                     print(f"Optimal DT depth — Track A: {depth_a},  Track B: {depth_b}", file=f)
-                    sys.__stdout__.write(
-                        f"  Optimal DT depth — \033[34mTrack A: {depth_a}\033[0m,"
-                        f"  \033[32mTrack B: {depth_b}\033[0m\n"
-                    )
 
             if "Random Forest" in fitted_a:
                 n_a = fitted_a["Random Forest"].n_estimators
                 if single_track:
                     print(f"Optimal n_estimators — {n_a}", file=f)
-                    sys.__stdout__.write(f"  Optimal n_estimators — \033[34m{n_a}\033[0m\n")
                 else:
                     n_b = fitted_b["Random Forest"].n_estimators
                     print(f"Optimal n_estimators — Track A: {n_a},  Track B: {n_b}", file=f)
-                    sys.__stdout__.write(
-                        f"  Optimal n_estimators — \033[34mTrack A: {n_a}\033[0m,"
-                        f"  \033[32mTrack B: {n_b}\033[0m\n"
-                    )
 
             # 4. Modeling & Visualisation
             print_header("4. Model Evaluation & Visualisation", file=f)
+            sys.__stdout__.write("  4. Model Evaluation & Visualisation\n")
 
             # LR baseline — needed for DT, RF, and Lasso tuning curves
             needs_lr_baseline = any(k in hist_a for k in ("DT", "RF", "Lasso"))
@@ -459,9 +449,9 @@ def main(models=None, datasets=None):
                 print(f"  [Plot saved]  RF_feature_importance_{tag}.png", file=f)
 
             # 5. Residual Normality Diagnostics
-            # Skewness & Excess Kurtosis table plus Q-Q plots and histograms.
             print_header("5. Residual Normality Diagnostics", file=f)
-            sys.stdout = Tee(sys.__stdout__, f)
+            sys.__stdout__.write("  5. Residual Normality Diagnostics\n")
+            sys.stdout = f
             residual_normality_descriptives(
                 preds_a_disp, y_va_disp,
                 preds_b_disp if not single_track else None,
@@ -485,12 +475,10 @@ def main(models=None, datasets=None):
                 print(f"  [Plot saved]  {clean}_normality_{tag}.png", file=f)
 
             # 6. Residual Outlier Profile
-            # Compares the top 5% highest-error predictions against the full test set. 
-            # Over-represented subgroups (positive Δ pp) reveal structural failure modes 
-            # rather than random noise.
             print_header("6. Residual Outlier Profile", file=f)
+            sys.__stdout__.write("  6. Residual Outlier Profile\n")
             if "Linear Regression" in preds_a_disp:
-                sys.stdout = Tee(sys.__stdout__, f)
+                sys.stdout = f
                 outlier_stats = residual_outlier_profile(
                     df_imp, X_va.index,
                     y_va_disp, preds_a_disp["Linear Regression"],
@@ -507,6 +495,7 @@ def main(models=None, datasets=None):
                 print("  Linear Regression was not fitted — profile skipped.", file=f)
 
             # 7. Final Comparison Table
+            sys.__stdout__.write("  7. Final Comparison Table\n")
             summary_df = create_summary_table(results_a, results_b, single_track=single_track)
             print("\nFinal Model Comparison (Strict 80/20 Test Evaluation):", file=f)
             print(summary_df.to_string(index=False), file=f)
