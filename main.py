@@ -20,8 +20,10 @@ from src.models import tune_decision_tree, tune_random_forest, tune_lasso, get_m
 from src.visualiser import (plot_exam_score_distribution, plot_correlation_with_target,
                             plot_tuning_curve, plot_actual_vs_predicted,
                             plot_residuals, plot_feature_importance,
-                            plot_lasso_tuning_curve, plot_lasso_coefficients)
-from src.evaluator import create_summary_table, residual_normality_tests, shapiro_wilk_lr
+                            plot_lasso_tuning_curve, plot_lasso_coefficients,
+                            plot_outlier_profile, plot_residual_normality)
+from src.evaluator import (create_summary_table, residual_normality_descriptives,
+                            residual_outlier_profile)
 
 # Canonical model order used as the default when models=None is passed to main().
 ALL_MODELS = [
@@ -456,41 +458,55 @@ def main(models=None, datasets=None):
                 )
                 print(f"  [Plot saved]  RF_feature_importance_{tag}.png", file=f)
 
-            # 5. Residual Normality Tests (Shapiro-Wilk)
-            print_header("5. Residual Normality Tests", file=f)
+            # 5. Residual Normality Diagnostics
+            # Skewness & Excess Kurtosis table plus Q-Q plots and histograms.
+            print_header("5. Residual Normality Diagnostics", file=f)
             sys.stdout = Tee(sys.__stdout__, f)
-            residual_normality_tests(
+            residual_normality_descriptives(
                 preds_a_disp, y_va_disp,
                 preds_b_disp if not single_track else None,
                 y_vb_disp    if not single_track else None,
                 single_track=single_track,
                 models=model_list,
             )
-            # Focused LR test — formal OLS assumption check.
-            # The normality assumption applies to residuals in the scale the
-            # model was fitted on. When log(y+1) was applied, use the log-scale
-            # y and predictions (pre-expm1); otherwise use the display scale.
-            if "Linear Regression" in preds_a_disp:
-                if log_target:
-                    sw_y_a = y_va
-                    sw_p_a = preds_a["Linear Regression"]
-                    sw_y_b = y_vb if not single_track else None
-                    sw_p_b = preds_b["Linear Regression"] if not single_track else None
-                    sw_note = "Residuals in log-scale (model fitting scale, before back-transform)."
-                else:
-                    sw_y_a = y_va_disp
-                    sw_p_a = preds_a_disp["Linear Regression"]
-                    sw_y_b = y_vb_disp if not single_track else None
-                    sw_p_b = preds_b_disp["Linear Regression"] if not single_track else None
-                    sw_note = ""
-                shapiro_wilk_lr(
-                    sw_y_a, sw_p_a, sw_y_b, sw_p_b,
-                    single_track=single_track,
-                    note=sw_note,
-                )
             sys.stdout = old_stdout
 
-            # 6. Final Comparison Table
+            # Q-Q + histogram normality plots
+            for name in [m for m in ["Linear Regression", "Lasso",
+                                      "DT (Optimal)", "Random Forest"]
+                         if m in preds_a_disp]:
+                clean = name.replace(" ", "_").replace("(", "").replace(")", "")
+                plot_residual_normality(
+                    y_va_disp, preds_a_disp[name],
+                    y_vb_disp, preds_b_disp[name],
+                    name, out_dir / f"{clean}_normality_{tag}.png",
+                    single_track=single_track
+                )
+                print(f"  [Plot saved]  {clean}_normality_{tag}.png", file=f)
+
+            # 6. Residual Outlier Profile
+            # Compares the top 5% highest-error predictions against the full test set. 
+            # Over-represented subgroups (positive Δ pp) reveal structural failure modes 
+            # rather than random noise.
+            print_header("6. Residual Outlier Profile", file=f)
+            if "Linear Regression" in preds_a_disp:
+                sys.stdout = Tee(sys.__stdout__, f)
+                outlier_stats = residual_outlier_profile(
+                    df_imp, X_va.index,
+                    y_va_disp, preds_a_disp["Linear Regression"],
+                    cfg["target"], model_name="Linear Regression"
+                )
+                sys.stdout = old_stdout
+                if outlier_stats:
+                    plot_outlier_profile(
+                        outlier_stats, "Linear Regression",
+                        out_dir / f"outlier_profile_{tag}.png"
+                    )
+                    print(f"  [Plot saved]  outlier_profile_{tag}.png", file=f)
+            else:
+                print("  Linear Regression was not fitted — profile skipped.", file=f)
+
+            # 7. Final Comparison Table
             summary_df = create_summary_table(results_a, results_b, single_track=single_track)
             print("\nFinal Model Comparison (Strict 80/20 Test Evaluation):", file=f)
             print(summary_df.to_string(index=False), file=f)

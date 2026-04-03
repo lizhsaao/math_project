@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
+from scipy.stats import probplot
 
 # --- Style constants matching the notebook ---
 _COL_A   = "steelblue"    # Track A
@@ -410,5 +411,139 @@ def plot_lasso_coefficients(model_a, model_b, feat_names_a, feat_names_b, output
         ax.spines["right"].set_visible(False)
 
     fig.suptitle("Lasso Coefficients (non-zero only)", fontsize=13)
+    plt.tight_layout()
+    _save(fig, output_path)
+
+
+def plot_outlier_profile(outlier_stats, model_name, output_path):
+    """
+    Diverging horizontal bar chart showing Δ frequency (percentage points)
+    between the top-5%-absolute-error outlier subset and the full test set,
+    one subplot per categorical predictor.
+
+    Orange bars (Δ > 0) = subgroup over-represented in the model's worst
+    predictions; blue bars (Δ < 0) = under-represented.
+
+    Parameters
+    ----------
+    outlier_stats : Dict returned by residual_outlier_profile() —
+                    {col: {"categories": [...], "delta_pp": [...], ...}}.
+    model_name    : Model label for the figure suptitle.
+    output_path   : File path to save the figure.
+    """
+    if not outlier_stats:
+        return
+
+    cols       = list(outlier_stats.keys())
+    n          = len(cols)
+    ncols_plot = min(n, 4)
+    nrows_plot = (n + ncols_plot - 1) // ncols_plot
+
+    fig, axes = plt.subplots(nrows_plot, ncols_plot,
+                              figsize=(4.5 * ncols_plot, 3.5 * nrows_plot))
+    # Always work with a flat list, even for a single subplot
+    axes_flat = np.array(axes).flatten() if n > 1 else [axes]
+
+    for i, col in enumerate(cols):
+        ax    = axes_flat[i]
+        cats  = outlier_stats[col]["categories"]
+        delta = outlier_stats[col]["delta_pp"]
+
+        # Sort by Δ ascending — most negative at bottom, most positive at top
+        pairs    = sorted(zip(delta, cats))
+        delta_s  = [p[0] for p in pairs]
+        cats_s   = [str(p[1]) for p in pairs]
+        colors_s = [_COL_REF if d > 0 else _COL_A for d in delta_s]
+
+        ax.barh(range(len(cats_s)), delta_s, color=colors_s, alpha=0.85)
+        ax.set_yticks(range(len(cats_s)))
+        ax.set_yticklabels(cats_s, fontsize=8)
+        ax.axvline(0, color="black", linewidth=0.8)
+        ax.set_xlabel("Δ frequency (pp)", fontsize=9)
+        ax.set_title(col, fontsize=10)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # Hide any unused subplot panels in the grid
+    for j in range(n, len(axes_flat)):
+        axes_flat[j].set_visible(False)
+
+    fig.suptitle(
+        f"Residual Outlier Profile — {model_name}\n"
+        f"(top 5% AE vs. full test set  |  "
+        f"orange = over-represented in worst predictions)",
+        fontsize=10
+    )
+    plt.tight_layout()
+    _save(fig, output_path)
+
+
+def plot_residual_normality(y_true_a, y_pred_a, y_true_b, y_pred_b,
+                             model_name, output_path, single_track=False):
+    """
+    Combined Q-Q plot and residual histogram with Normal overlay.
+
+    Left column  : Q-Q plot — residual quantiles vs theoretical Normal
+                   quantiles with 45-degree reference line.
+    Right column : Histogram of residuals with fitted Normal PDF overlay
+                   to visually assess symmetry and bell-shape.
+
+    Single-track renders one row; dual-track renders two rows (A/B).
+
+    Parameters
+    ----------
+    y_true_a, y_pred_a : True and predicted values for Track A.
+    y_true_b, y_pred_b : True and predicted values for Track B.
+    model_name         : Model label for the figure suptitle.
+    output_path        : File path to save the figure.
+    single_track       : If True, renders one row (Track A data only).
+    """
+    if single_track:
+        tracks = [("All Data", y_true_a, y_pred_a, _COL_A)]
+    else:
+        tracks = [
+            ("Track A (Imputed)", y_true_a, y_pred_a, _COL_A),
+            ("Track B (Dropped)", y_true_b, y_pred_b, _COL_B),
+        ]
+    nrows = len(tracks)
+    fig, axes = subplots(nrows, 2, figsize=(10, 4 * nrows))
+    if nrows == 1:
+        axes = axes[np.newaxis, :]   # force 2-D indexing
+
+    for row, (label, y_true, y_pred, col) in enumerate(tracks):
+        resid = np.asarray(y_true) - np.asarray(y_pred)
+
+        # --- Q-Q plot ---
+        ax_qq = axes[row, 0]
+        (osm, osr), (slope, intercept, _) = probplot(resid, dist="norm")
+        ax_qq.scatter(osm, osr, s=12, alpha=0.5, color=col, edgecolors="none")
+        line_x = np.array([osm.min(), osm.max()])
+        ax_qq.plot(line_x, slope * line_x + intercept,
+                   "--", color=_COL_REF, linewidth=1.5, label="45° ref")
+        ax_qq.set_xlabel("Theoretical Quantiles")
+        ax_qq.set_ylabel("Residual Quantiles")
+        ax_qq.set_title(f"Q-Q — {label}", fontsize=10)
+        ax_qq.legend(fontsize=8)
+        ax_qq.spines["top"].set_visible(False)
+        ax_qq.spines["right"].set_visible(False)
+
+        # --- Residual histogram with Normal PDF overlay ---
+        ax_hist = axes[row, 1]
+        ax_hist.hist(resid, bins="fd", density=True,
+                     color=col, alpha=0.7, edgecolor="white")
+        mu, sig = resid.mean(), resid.std()
+        x = np.linspace(mu - 4 * sig, mu + 4 * sig, 300)
+        pdf = (1 / (sig * np.sqrt(2 * np.pi))) * np.exp(
+            -0.5 * ((x - mu) / sig) ** 2)
+        ax_hist.plot(x, pdf, "r-", linewidth=2,
+                     label=f"N({mu:.2f}, {sig:.2f}²)")
+        ax_hist.set_xlabel("Residual")
+        ax_hist.set_ylabel("Density")
+        ax_hist.set_title(f"Histogram — {label}", fontsize=10)
+        ax_hist.legend(fontsize=8)
+        ax_hist.spines["top"].set_visible(False)
+        ax_hist.spines["right"].set_visible(False)
+
+    fig.suptitle(f"Residual Normality — {model_name}", fontsize=13)
     plt.tight_layout()
     _save(fig, output_path)

@@ -3,7 +3,7 @@
 """
 import numpy as np
 import pandas as pd
-from scipy.stats import shapiro
+from scipy.stats import skew, kurtosis
 
 
 def create_summary_table(results_a, results_b, models=None, single_track=False):
@@ -52,19 +52,15 @@ def create_summary_table(results_a, results_b, models=None, single_track=False):
     return pd.DataFrame(data)
 
 
-def residual_normality_tests(preds_a, y_va, preds_b=None, y_vb=None,
-                              single_track=False, models=None):
+def residual_normality_descriptives(preds_a, y_va, preds_b=None, y_vb=None,
+                                     single_track=False, models=None):
     """
-    Applies the Shapiro-Wilk test to residuals (actual − predicted) for each
-    fitted model and prints the results to stdout.
+    Computes Skewness and Excess Kurtosis for the residuals of each fitted model.
 
-    The null hypothesis H_0 is that residuals are normally distributed.
-    A p-value below 0.05 provides evidence against normality at the 5% level.
-    The assumption is most relevant for Linear Regression and Lasso; tree-based
-    models make no normality assumption on residuals.
-
-    Shapiro-Wilk is accurate for n ≤ 5,000. For larger test sets the W
-    statistic is reliable but the p-value becomes conservative.
+    Normality reference values: Skewness ≈ 0 (symmetric distribution),
+    Excess Kurtosis ≈ 0 (mesokurtic — normal tail weight).  Visual
+    inspection of Q-Q plots and histograms is the primary normality
+    diagnostic; these statistics quantify the extent of any departure.
 
     Parameters
     ----------
@@ -80,87 +76,127 @@ def residual_normality_tests(preds_a, y_va, preds_b=None, y_vb=None,
     y_va_arr = np.asarray(y_va)
     y_vb_arr = np.asarray(y_vb) if y_vb is not None else None
 
-    print(f"\n--- Shapiro-Wilk Residual Normality Test ---")
-    print(f"  (H_0: residuals are normally distributed  |  α = 0.05)")
+    print("\n--- Residual Normality Diagnostics ---")
+    print("  Normality is assessed via visual inspection of Q-Q plots and histograms.")
+    print("  Skewness/Kurtosis values quantify the extent of departure from normality.")
+    print("  Reference: Skewness ≈ 0 (symmetric), Excess Kurtosis ≈ 0 (mesokurtic).\n")
 
     if single_track:
-        print(f"\n  {'Model':<22} {'W':>8}  {'p-value':>10}  {'Result':>12}")
-        print(f"  {'-'*58}")
+        print(f"  {'Model':<22} {'Skewness':>9}  {'Ex. Kurtosis':>13}")
+        print(f"  {'-'*48}")
         for name in models:
             if name not in preds_a:
                 continue
             resid = y_va_arr - np.asarray(preds_a[name])
-            if len(resid) < 3:
-                continue
-            W, p = shapiro(resid)
-            result = "Normal" if p >= 0.05 else "Non-normal"
-            print(f"  {name:<22} {W:>8.4f}  {p:>10.4f}  {result:>12}")
+            s = skew(resid, bias=False)
+            k = kurtosis(resid, bias=False)
+            print(f"  {name:<22} {s:>+9.4f}  {k:>+13.4f}")
     else:
-        header = (f"  {'Model':<22} {'W (A)':>8}  {'p (A)':>9}  "
-                  f"{'W (B)':>8}  {'p (B)':>9}  {'A':>10}  {'B':>10}")
-        print(f"\n{header}")
-        print(f"  {'-'*82}")
+        print(f"  {'Model':<22} {'Skew(A)':>8}  {'Kurt(A)':>8}  "
+              f"{'Skew(B)':>8}  {'Kurt(B)':>8}")
+        print(f"  {'-'*60}")
         for name in models:
             if name not in preds_a:
                 continue
             resid_a = y_va_arr - np.asarray(preds_a[name])
-            resid_b = y_vb_arr - np.asarray(preds_b[name]) if preds_b else resid_a
-            if len(resid_a) < 3:
-                continue
-            W_a, p_a = shapiro(resid_a)
-            W_b, p_b = shapiro(resid_b)
-            res_a = "Normal" if p_a >= 0.05 else "Non-normal"
-            res_b = "Normal" if p_b >= 0.05 else "Non-normal"
-            print(f"  {name:<22} {W_a:>8.4f}  {p_a:>9.4f}  "
-                  f"{W_b:>8.4f}  {p_b:>9.4f}  {res_a:>10}  {res_b:>10}")
+            resid_b = (y_vb_arr - np.asarray(preds_b[name])
+                       if preds_b else resid_a)
+            sa = skew(resid_a, bias=False)
+            ka = kurtosis(resid_a, bias=False)
+            sb = skew(resid_b, bias=False)
+            kb = kurtosis(resid_b, bias=False)
+            print(f"  {name:<22} {sa:>+8.4f}  {ka:>+8.4f}  "
+                  f"{sb:>+8.4f}  {kb:>+8.4f}")
 
-    print(f"\n  [Normality of residuals is a key assumption for Linear Regression"
-          f" and Lasso;\n   tree-based models make no such assumption.]")
+    print("\n  [Normality of residuals is a key assumption for Linear Regression"
+          " and Lasso;\n   tree-based models make no such assumption.]")
 
 
-def shapiro_wilk_lr(y_true_a, y_pred_lr_a, y_true_b=None, y_pred_lr_b=None,
-                    single_track=False, note=""):
+def residual_outlier_profile(df_original, test_idx, y_true, y_pred,
+                              target, model_name, top_pct=0.05):
     """
-    Shapiro-Wilk normality test applied specifically to Linear Regression
-    residuals. Prints the W statistic, p-value, and Pass / Fail verdict.
+    Isolates the top `top_pct` fraction of test observations by absolute error
+    and cross-references their categorical traits against the full test set.
 
-    This is the formal test for the key OLS assumption that errors are
-    normally distributed. H_0: residuals ~ Normal.
-    Pass if p > 0.05 (fail to reject normality at the 5 % level).
+    Prints a per-column frequency table: population %, outlier %, and Δ pp
+    (percentage-point difference). A positive Δ means that subgroup is
+    over-represented among the worst predictions — i.e. the model fails
+    disproportionately for that category.
 
     Parameters
     ----------
-    y_true_a, y_pred_lr_a : True and LR-predicted values for Track A.
-    y_true_b, y_pred_lr_b : True and LR-predicted values for Track B
-                            (ignored when single_track=True).
-    single_track          : If True, only Track A is tested.
-    note                  : Optional one-line annotation printed below the
-                            header (e.g. to indicate which scale was tested).
+    df_original : DataFrame with original (pre-encoding) columns — pass df_imp.
+    test_idx    : Index labels of test rows in df_original (use X_va.index).
+    y_true      : True target values for the test set (array or Series).
+    y_pred      : Predicted values for the test set (numpy array).
+    target      : Name of the response variable column (excluded from profiling).
+    model_name  : Model label used in printed headers.
+    top_pct     : Fraction of highest-error observations to isolate (default 0.05).
 
     Returns
     -------
-    dict with keys "W_a", "p_a", "pass_a" (and _b equivalents if two tracks).
+    dict  {col: {"categories": [...], "delta_pp": [...],
+                 "pop_pct": [...], "out_pct": [...]}}
+    Returns an empty dict if no categorical predictors exist or the outlier
+    group is too small to be reliable.
     """
-    def _run(y_true, y_pred, label):
-        resid = np.asarray(y_true) - np.asarray(y_pred)
-        W, p  = shapiro(resid)
-        result = "Pass" if p > 0.05 else "Fail"
-        print(f"  {label:<18}  W = {W:.4f}   p-value = {p:.4f}   [{result}]")
-        return W, p, result
+    df_test = df_original.loc[test_idx]
+    cat_cols = [c for c in df_test.select_dtypes(include=["object", "category"]).columns
+                if c != target]
 
-    print(f"\n--- Shapiro-Wilk Test: Linear Regression Residuals ---")
-    print(f"  (H_0: residuals are normally distributed  |  Pass if p > 0.05)")
-    if note:
-        print(f"  Note: {note}")
-    print(f"  {'-'*60}")
+    if not cat_cols:
+        print(f"\n  No categorical predictors — outlier profile skipped.")
+        return {}
 
-    out = {}
-    W_a, p_a, r_a = _run(y_true_a, y_pred_lr_a,
-                          "All Data" if single_track else "Track A (Imputed)")
-    out.update({"W_a": W_a, "p_a": p_a, "pass_a": r_a == "Pass"})
+    abs_err = np.abs(np.asarray(y_true) - np.asarray(y_pred))
+    cutoff = np.percentile(abs_err, (1 - top_pct) * 100)
+    outlier_mask = abs_err >= cutoff
+    n_total = len(abs_err)
+    n_outlier = int(outlier_mask.sum())
 
-    if not single_track and y_true_b is not None and y_pred_lr_b is not None:
-        W_b, p_b, r_b = _run(y_true_b, y_pred_lr_b, "Track B (Dropped)")
-        out.update({"W_b": W_b, "p_b": p_b, "pass_b": r_b == "Pass"})
+    if n_outlier < 5:
+        print(f"\n  Outlier subset too small ({n_outlier} rows) — profile skipped.")
+        return {}
 
-    return out
+    # df_test has the original (non-reset) index from df_original; use it to
+    # select outlier rows positionally via the index array.
+    outlier_labels = df_test.index[outlier_mask]
+    df_outlier = df_test.loc[outlier_labels]
+
+    print(f"\n--- Residual Outlier Profile — {model_name} ---")
+    print(f"  Top {top_pct*100:.0f}% absolute errors: "
+          f"{n_outlier} / {n_total} test observations  (AE ≥ {cutoff:.4g})")
+    print(f"  Δ = (outlier freq) − (population freq)   "
+          f"[positive Δ = over-represented in worst predictions]\n")
+
+    outlier_stats = {}
+    for col in cat_cols:
+        freq_all = df_test[col].value_counts(normalize=True)
+        freq_out = df_outlier[col].value_counts(normalize=True)
+        all_cats = freq_all.index.union(freq_out.index)
+
+        delta = {cat: (freq_out.get(cat, 0.0) - freq_all.get(cat, 0.0))
+                 for cat in all_cats}
+        # Sort by |Δ| descending — most deviant categories shown first
+        delta_sorted = dict(sorted(delta.items(),
+                                   key=lambda x: abs(x[1]), reverse=True))
+
+        print(f"  {col}:")
+        print(f"  {'Category':<28}  {'Pop.%':>6}  {'Outlier%':>8}  {'Δ pp':>7}")
+        print(f"  {'-'*54}")
+        for cat, d in delta_sorted.items():
+            pop_pct = freq_all.get(cat, 0.0) * 100
+            out_pct = freq_out.get(cat, 0.0) * 100
+            flag = "  ◄" if abs(d) >= 0.05 else ""
+            print(f"  {str(cat):<28}  {pop_pct:>6.1f}  {out_pct:>8.1f}  "
+                  f"{d*100:>+7.1f}{flag}")
+        print()
+
+        outlier_stats[col] = {
+            "categories": list(delta_sorted.keys()),
+            "delta_pp": [v * 100 for v in delta_sorted.values()],
+            "pop_pct": [freq_all.get(c, 0.0) * 100 for c in delta_sorted],
+            "out_pct": [freq_out.get(c, 0.0) * 100 for c in delta_sorted],
+        }
+
+    return outlier_stats
