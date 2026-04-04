@@ -10,31 +10,40 @@ from scipy.stats import probplot
 
 # --- Style constants matching the notebook ---
 _COL_A   = "steelblue"    # Track A
-_COL_B   = "mediumseagreen"        # Track B
+_COL_B   = "mediumseagreen"    # Track B
 _COL_REF = "darkorange"   # reference lines (ideal-fit diagonal, optimal depth vline)
 _COL_LR  = "gray"     # LR baseline
 
 
 def _save(fig, output_path):
-    """Saves the figure at 150 dpi and closes it."""
+    """
+    Saves the matplotlib figure at 150 dpi and closes it.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        The figure object to save.
+    output_path : str or pathlib.Path
+        File path where the image will be saved.
+    """
     fig.savefig(output_path, bbox_inches="tight", dpi=150)
     plt.close(fig)
 
 
 def plot_exam_score_distribution(df, target, output_path, bin_strategy="fd"):
     """
-    Histogram of the target variable with a Normal distribution overlay.
+    Plots a histogram of the target variable with a Normal distribution overlay.
 
     Parameters
     ----------
-    df           : DataFrame containing the target column.
-    target       : Name of the target/response variable column.
-    output_path  : File path to save the figure.
-    bin_strategy : How to compute histogram bins:
-                   "unit"    — width-1 integer bins (0–100); exposes grade-boundary spikes.
-                   "integer" — half-integer edges centred on each discrete integer value.
-                   "fd"      — Freedman-Diaconis rule: bin_width = 2·IQR·n^(-1/3);
-                               robust to outliers in skewed continuous distributions.
+    df : pandas.DataFrame
+        DataFrame containing the target column.
+    target : str
+        Name of the target variable.
+    output_path : str or pathlib.Path
+        File path to save the figure.
+    bin_strategy : str, optional
+        Binning method: "unit", "integer", or "fd" (default is "fd").
     """
     data = df[target].dropna()
 
@@ -75,16 +84,18 @@ def plot_exam_score_distribution(df, target, output_path, bin_strategy="fd"):
 
 def plot_correlation_with_target(df_a, df_b, target, output_path, single_track=False):
     """
-    Horizontal bar charts of Pearson correlations between each numerical
-    predictor and the target variable. Side-by-side for two tracks; single
-    panel when single_track=True.
+    Plots horizontal bar charts of Pearson correlations between predictors and target.
 
     Parameters
     ----------
-    df_a, df_b   : DataFrames for Track A (imputed) and Track B (dropped).
-    target       : Name of the target/response variable column.
-    output_path  : File path to save the figure.
-    single_track : If True, renders one panel (Track A data only).
+    df_a, df_b : pandas.DataFrame
+        DataFrames for Track A and Track B.
+    target : str
+        Name of the target variable.
+    output_path : str or pathlib.Path
+        File path to save the figure.
+    single_track : bool, optional
+        If True, renders only Track A.
     """
     corr_a = df_a.corr(numeric_only=True)[target].drop(target).sort_values()
     corr_b = df_b.corr(numeric_only=True)[target].drop(target).sort_values()
@@ -113,17 +124,22 @@ def plot_correlation_with_target(df_a, df_b, target, output_path, single_track=F
 def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path,
                              single_track=False, target="value"):
     """
-    Actual vs. predicted scatter plots. Side-by-side for two tracks; single
-    panel when single_track=True.
+    Plots predicted vs. actual scatter charts with an ideal-fit reference line.
 
     Parameters
     ----------
-    y_true_a, y_pred_a : True and predicted values for Track A.
-    y_true_b, y_pred_b : True and predicted values for Track B.
-    model_name         : Model label used in the figure title.
-    output_path        : File path to save the figure.
-    single_track       : If True, renders one panel (Track A data only).
-    target             : Name of the response variable (used for axis labels).
+    y_true_a, y_pred_a : array-like
+        True and predicted values for Track A.
+    y_true_b, y_pred_b : array-like
+        True and predicted values for Track B.
+    model_name : str
+        Model name for the figure title.
+    output_path : str or pathlib.Path
+        File path to save the figure.
+    single_track : bool, optional
+        If True, renders only Track A.
+    target : str, optional
+        Target variable name for axis labels.
     """
     if single_track:
         fig, ax = subplots(1, 1, figsize=(6, 5))
@@ -157,19 +173,26 @@ def plot_tuning_curve(history_a, history_b, output_path,
                       suptitle="CV RMSE vs. Tree Depth  (10-fold CV)",
                       n_folds=10, single_track=False):
     """
-    CV RMSE tuning curve with ±1 s.d. band, 1-SE threshold line, and optional
-    LR baseline. Side-by-side for two tracks; single panel when single_track=True.
+    Plots a CV RMSE tuning curve with ±1 s.d. bands and a 1-SE threshold line.
 
     Parameters
     ----------
-    history_a, history_b : Lists of {"<x_key>", "rmse", "std"} dicts (one per track).
-    output_path          : File path to save the figure.
-    lr_rmse_a, lr_rmse_b : Optional LR CV RMSE drawn as a reference line.
-    x_key                : Key in history dicts used for the x-axis (default "depth").
-    x_label              : x-axis label string (default "Tree Depth").
-    suptitle             : Figure-level title (default matches DT depth scan).
-    n_folds              : Number of CV folds used; needed to compute SE (default 10).
-    single_track         : If True, renders one panel (Track A data only).
+    history_a, history_b : list of dict
+        Tuning histories for Tracks A and B.
+    output_path : str or pathlib.Path
+        File path to save the figure.
+    lr_rmse_a, lr_rmse_b : float, optional
+        Linear Regression baseline RMSEs.
+    x_key : str, optional
+        Dictionary key for x-axis values.
+    x_label : str, optional
+        Label for the x-axis.
+    suptitle : str, optional
+        Figure title.
+    n_folds : int, optional
+        Number of CV folds.
+    single_track : bool, optional
+        If True, renders only Track A.
     """
     if single_track:
         fig, ax = subplots(1, 1, figsize=(7, 5))
@@ -226,17 +249,22 @@ def plot_tuning_curve(history_a, history_b, output_path,
 def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path,
                    single_track=False, target="value"):
     """
-    Residuals vs. predicted scatter plots. Side-by-side for two tracks; single
-    panel when single_track=True.
+    Plots residuals against predicted values to visually check for homoscedasticity.
 
     Parameters
     ----------
-    y_true_a, y_pred_a : True and predicted values for Track A.
-    y_true_b, y_pred_b : True and predicted values for Track B.
-    model_name         : Model label used in the figure title.
-    output_path        : File path to save the figure.
-    single_track       : If True, renders one panel (Track A data only).
-    target             : Name of the response variable (used for axis label).
+    y_true_a, y_pred_a : array-like
+        True and predicted values for Track A.
+    y_true_b, y_pred_b : array-like
+        True and predicted values for Track B.
+    model_name : str
+        Model name for the figure title.
+    output_path : str or pathlib.Path
+        File path to save the figure.
+    single_track : bool, optional
+        If True, renders only Track A.
+    target : str, optional
+        Target variable name for axis labels.
     """
     if single_track:
         fig, ax = subplots(1, 1, figsize=(7, 4))
@@ -265,16 +293,20 @@ def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_pa
 def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output_path,
                             model_name="DT (Optimal)", single_track=False):
     """
-    Horizontal bar charts of the top 10 feature importances. Side-by-side for
-    two tracks; single panel when single_track=True.
+    Plots horizontal bar charts of the top 10 feature importances.
 
     Parameters
     ----------
-    model_a, model_b           : Fitted tree estimators with feature_importances_.
-    feat_names_a, feat_names_b : Column names from each track's training matrix.
-    output_path                : File path to save the figure.
-    model_name                 : Model label used in the figure title (default "DT (Optimal)").
-    single_track               : If True, renders one panel (Track A data only).
+    model_a, model_b : estimator objects
+        Fitted tree estimators with a `feature_importances_` attribute.
+    feat_names_a, feat_names_b : list of str
+        Feature names for Tracks A and B.
+    output_path : str or pathlib.Path
+        File path to save the figure.
+    model_name : str, optional
+        Model name for the figure title.
+    single_track : bool, optional
+        If True, renders only Track A.
     """
     if single_track:
         fig, ax = subplots(1, 1, figsize=(8, 6))
@@ -304,16 +336,20 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
                             lr_rmse_a=None, lr_rmse_b=None, n_folds=10,
                             single_track=False):
     """
-    CV RMSE vs. Lasso alpha on a log x-axis with ±1 s.d. band and 1-SE selection
-    line. Side-by-side for two tracks; single panel when single_track=True.
+    Plots CV RMSE vs. Lasso alpha on a log scale with a 1-SE selection line.
 
     Parameters
     ----------
-    history_a, history_b : Lists of {"alpha", "rmse", "std"} dicts (one per track).
-    output_path          : File path to save the figure.
-    lr_rmse_a, lr_rmse_b : Optional LR CV RMSE reference lines (one per track).
-    n_folds              : Number of CV folds used (default 10).
-    single_track         : If True, renders one panel (Track A data only).
+    history_a, history_b : list of dict
+        Tuning histories for Tracks A and B.
+    output_path : str or pathlib.Path
+        File path to save the figure.
+    lr_rmse_a, lr_rmse_b : float, optional
+        Linear Regression baseline RMSEs.
+    n_folds : int, optional
+        Number of CV folds.
+    single_track : bool, optional
+        If True, renders only Track A.
     """
     if single_track:
         fig, ax = subplots(1, 1, figsize=(7, 5))
@@ -356,7 +392,7 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
         ax.axvline(cross_x, linestyle="--", color=_COL_REF,
                    label=f"1-SE crossing = {cross_x:.3g}")
 
-        # ADDED: LR baseline (Green dotted)
+        # LR baseline (Green dotted)
         if lr_rmse is not None:
             ax.axhline(lr_rmse, linestyle=":", color=_COL_LR, linewidth=1.5,
                        label=f"LR baseline  ({lr_rmse:.3f})")
@@ -377,15 +413,18 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
 def plot_lasso_coefficients(model_a, model_b, feat_names_a, feat_names_b, output_path,
                             single_track=False):
     """
-    Horizontal bar charts of Lasso coefficients (non-zero only). Side-by-side
-    for two tracks; single panel when single_track=True.
+    Plots horizontal bar charts of non-zero Lasso coefficients.
 
     Parameters
     ----------
-    model_a, model_b           : Fitted Lasso estimators with a .coef_ attribute.
-    feat_names_a, feat_names_b : Column names from each track's training matrix.
-    output_path                : File path to save the figure.
-    single_track               : If True, renders one panel (Track A data only).
+    model_a, model_b : sklearn.linear_model.Lasso
+        Fitted Lasso estimators.
+    feat_names_a, feat_names_b : list of str
+        Feature names for Tracks A and B.
+    output_path : str or pathlib.Path
+        File path to save the figure.
+    single_track : bool, optional
+        If True, renders only Track A.
     """
     if single_track:
         fig, ax = subplots(1, 1, figsize=(8, 6))
@@ -417,25 +456,22 @@ def plot_lasso_coefficients(model_a, model_b, feat_names_a, feat_names_b, output
 
 def plot_outlier_profile(outlier_stats, model_name, output_path):
     """
-    Diverging horizontal bar chart showing Δ frequency (percentage points)
-    between the top-5%-absolute-error outlier subset and the full test set,
-    one subplot per categorical predictor.
-
-    Orange bars (Δ > 0) = subgroup over-represented in the model's worst
-    predictions; blue bars (Δ < 0) = under-represented.
+    Plots a diverging bar chart comparing outlier subgroup frequencies to the test set.
 
     Parameters
     ----------
-    outlier_stats : Dict returned by residual_outlier_profile() —
-                    {col: {"categories": [...], "delta_pp": [...], ...}}.
-    model_name    : Model label for the figure suptitle.
-    output_path   : File path to save the figure.
+    outlier_stats : dict
+        Categorical frequency diffs returned by `residual_outlier_profile()`.
+    model_name : str
+        Model name for the figure title.
+    output_path : str or pathlib.Path
+        File path to save the figure.
     """
     if not outlier_stats:
         return
 
-    cols       = list(outlier_stats.keys())
-    n          = len(cols)
+    cols = list(outlier_stats.keys())
+    n = len(cols)
     ncols_plot = min(n, 4)
     nrows_plot = (n + ncols_plot - 1) // ncols_plot
 
@@ -450,7 +486,7 @@ def plot_outlier_profile(outlier_stats, model_name, output_path):
         delta = outlier_stats[col]["delta_pp"]
 
         # Sort by Δ ascending — most negative at bottom, most positive at top
-        pairs    = sorted(zip(delta, cats))
+        pairs = sorted(zip(delta, cats))
         delta_s  = [p[0] for p in pairs]
         cats_s   = [str(p[1]) for p in pairs]
         colors_s = [_COL_REF if d > 0 else _COL_A for d in delta_s]
@@ -492,11 +528,16 @@ def plot_residual_normality(y_true_a, y_pred_a, y_true_b, y_pred_b,
 
     Parameters
     ----------
-    y_true_a, y_pred_a : True and predicted values for Track A.
-    y_true_b, y_pred_b : True and predicted values for Track B.
-    model_name         : Model label for the figure suptitle.
-    output_path        : File path to save the figure.
-    single_track       : If True, renders one row (Track A data only).
+    y_true_a, y_pred_a : array-like
+        True and predicted values for Track A.
+    y_true_b, y_pred_b : array-like
+        True and predicted values for Track B.
+    model_name : str
+        Model name for the figure title.
+    output_path : str or pathlib.Path
+        File path to save the figure.
+    single_track : bool, optional
+        If True, renders only Track A.
     """
     if single_track:
         tracks = [("All Data", y_true_a, y_pred_a, _COL_A)]

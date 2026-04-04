@@ -1,32 +1,35 @@
 """
-    Factory functions for the null model, linear regression, Lasso,
-    decision tree regressor, and random forest regressor.
+    Model training, cross-validation tuning, and evaluation functions for 
+    the null model, linear regression, Lasso, decision tree regressor, and 
+    random forest regressor.
 """
 import numpy as np
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.dummy import DummyRegressor
 from sklearn.metrics import root_mean_squared_error, r2_score
 from src.config import CV_FOLDS, RANDOM_STATE
 
 def tune_decision_tree(X_train, y_train, depths):
     """
-    Finds the optimal tree depth using 10-fold CV on the 80% training set only,
-    applying the one-standard-error rule: select the shallowest depth whose
-    mean CV RMSE lies within one SE of the minimum.
+    Finds the optimal tree depth via 10-fold CV using the one-standard-error rule.
 
     Parameters
     ----------
-    X_train : Training feature matrix (80%).
-    y_train : Training response vector.
-    depths  : List of max_depth integers to test.
+    X_train : pandas.DataFrame or numpy.ndarray
+        Training feature matrix.
+    y_train : pandas.Series or numpy.ndarray
+        Training target vector.
+    depths : list of int
+        Candidate tree depths to evaluate.
 
     Returns
     -------
-    best_depth : Shallowest depth within 1 SE of the minimum CV RMSE.
-    history    : List of {"depth", "rmse", "std"} dicts for plotting.
+    best_depth : int
+        Shallowest depth within 1 SE of the minimum CV RMSE.
+    history : list of dict
+        Tuning metrics per depth (depth, rmse, std).
     """
     kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     history = []
@@ -51,20 +54,23 @@ def tune_decision_tree(X_train, y_train, depths):
 
 def tune_random_forest(X_train, y_train, n_estimators_list):
     """
-    Scans n_estimators via 10-fold CV on the 80% training set only, applying
-    the one-standard-error rule: select the fewest trees whose mean CV RMSE
-    lies within one SE of the minimum.
+    Finds the optimal number of trees via 10-fold CV using the one-standard-error rule.
 
     Parameters
     ----------
-    X_train          : Training feature matrix (80%).
-    y_train          : Training response vector.
-    n_estimators_list: List of n_estimators values to evaluate.
+    X_train : pandas.DataFrame or numpy.ndarray
+        Training feature matrix.
+    y_train : pandas.Series or numpy.ndarray
+        Training target vector.
+    n_estimators_list : list of int
+        Candidate forest sizes to evaluate.
 
     Returns
     -------
-    best_n  : Fewest trees within 1 SE of the minimum CV RMSE.
-    history : List of {"n_estimators", "rmse", "std"} dicts (one per candidate).
+    best_n : int
+        Fewest trees within 1 SE of the minimum CV RMSE.
+    history : list of dict
+        Tuning metrics per forest size (n_estimators, rmse, std).
     """
     kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     history = []
@@ -92,21 +98,23 @@ def tune_random_forest(X_train, y_train, n_estimators_list):
 
 def tune_lasso(X_train, y_train, alphas):
     """
-    Finds the optimal Lasso regularisation strength (alpha) via 10-fold CV on
-    the 80% training set only, applying the one-standard-error rule: select the
-    LARGEST alpha (most regularised / most parsimonious model) whose lower ±1 s.d.
-    bound still lies within one SE of the minimum CV RMSE.
+    Finds the optimal Lasso alpha via 10-fold CV using the one-standard-error rule.
 
     Parameters
     ----------
-    X_train : Training feature matrix (80%).
-    y_train : Training response vector.
-    alphas  : Sequence of positive alpha values to evaluate (e.g. log-spaced).
+    X_train : pandas.DataFrame or numpy.ndarray
+        Training feature matrix.
+    y_train : pandas.Series or numpy.ndarray
+        Training target vector.
+    alphas : array-like
+        Candidate regularization strengths to evaluate.
 
     Returns
     -------
-    best_alpha : Largest alpha within 1 SE of the minimum CV RMSE.
-    history    : List of {"alpha", "rmse", "std"} dicts (one per candidate).
+    best_alpha : float
+        Largest (most regularized) alpha within 1 SE of the minimum CV RMSE.
+    history : list of dict
+        Tuning metrics per alpha (alpha, rmse, std).
     """
     kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     history = []
@@ -141,18 +149,23 @@ def tune_lasso(X_train, y_train, alphas):
 
 def get_metrics_and_preds(X_train, y_train, X_test, y_test, model):
     """
-    Trains on the 80% set and evaluates on the 'locked' 20% test set.
+    Fits an estimator on the training set and evaluates it on the hold-out test set.
 
     Parameters
     ----------
-    X_train, y_train : Data used to fit the model.
-    X_test, y_test   : Held-out data used for final performance check.
-    model            : Initialised Scikit-Learn estimator.
+    X_train, X_test : pandas.DataFrame or numpy.ndarray
+        Training and testing feature matrices.
+    y_train, y_test : pandas.Series or numpy.ndarray
+        Training and testing target vectors.
+    model : estimator object
+        Unfitted Scikit-Learn estimator.
 
     Returns
     -------
-    metrics : Dictionary with RMSE and R2 scores.
-    y_pred  : Array of predictions for actual-vs-predicted plots.
+    metrics : dict
+        Test set performance metrics (RMSE, R²).
+    y_pred : numpy.ndarray
+        Model predictions on the test set.
     """
     # 1. Fit on the training set only
     model.fit(X_train, y_train)
@@ -169,18 +182,19 @@ def get_metrics_and_preds(X_train, y_train, X_test, y_test, model):
 
 def cv_rmse_lr(X_train, y_train):
     """
-    Computes the 10-fold CV RMSE for Linear Regression on the training set.
-    Used as the reference baseline on the DT tuning curve, so both the curve
-    and the baseline are on the same metric (CV RMSE, not hold-out RMSE).
+    Computes the 10-fold CV RMSE for a baseline Linear Regression model.
 
     Parameters
     ----------
-    X_train : Training feature matrix (80%).
-    y_train : Training response vector.
+    X_train : pandas.DataFrame or numpy.ndarray
+        Training feature matrix.
+    y_train : pandas.Series or numpy.ndarray
+        Training target vector.
 
     Returns
     -------
-    mean_rmse : Mean CV RMSE across folds.
+    mean_rmse : float
+        Mean cross-validated root mean squared error.
     """
     kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     scores = cross_val_score(

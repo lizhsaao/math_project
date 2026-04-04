@@ -1,3 +1,7 @@
+"""
+    Loads, cleans, and inspects CSV datasets. Also provides VIF-based
+    multicollinearity diagnostics (calculate_vif, vif_drop_analysis).
+"""
 import pandas as pd
 import numpy as np
 from statsmodels.stats.outliers_influence import variance_inflation_factor
@@ -10,9 +14,12 @@ def inspect_data(df, target, limits):
 
     Parameters
     ----------
-    df     : Raw DataFrame (pre-cleaning).
-    target : Name of the response variable column.
-    limits : Dict mapping column names to (max_value, label) tuples.
+    df : pandas.DataFrame
+        Raw DataFrame (pre-cleaning).
+    target : str
+        Name of the response variable column.
+    limits : dict
+        Mapping of column names to (max_value, label) tuples for upper-bound checks.
     """
     print(f"\n--- Data Integrity Inspection ---")
     
@@ -53,31 +60,32 @@ def inspect_data(df, target, limits):
 
 def load_and_clean(data_path, target, limits):
     """
-    Loads the CSV, normalises column names, removes rows violating domain
-    constraints, and generates the two analytical tracks.
+    Loads CSV, enforces domain constraints, drops sparse features, and splits analytical tracks.
 
-    Column names are normalised on load: spaces are replaced with underscores
-    so that downstream code (config limits, preprocessing) can reference them
-    consistently regardless of the raw CSV formatting.
-
-    Missing columns for Track B (listwise deletion) are auto-detected from the
-    cleaned dataframe — any column that contains at least one NaN is included.
-    No manual specification in config is needed.
+    Normalizes column names, removes target NaNs, and prepares the base DataFrames 
+    for Track A (imputation) and Track B (listwise deletion).
 
     Parameters
     ----------
-    data_path : Path to the CSV file.
-    target    : Name of the response variable column (post-normalisation).
-    limits    : Dict mapping column names to (max_value, label) tuples.
+    data_path : str or pathlib.Path
+        Path to the CSV file.
+    target : str
+        Name of the response variable column.
+    limits : dict
+        Mapping of column names to (max_value, label) tuples.
 
     Returns
     -------
-    df_raw          : DataFrame as loaded (column names already normalised).
-    df_cleaned      : Post-constraint DataFrame (domain outliers removed).
-    df_imputed_base : df_cleaned with NaNs retained — base for Track A.
-    df_dropped      : df_cleaned with any NaN rows removed — base for Track B.
-    load_meta       : Dict with row counts — n_raw, n_cols, n_target_dropped,
-                      n_domain_removed, n_cleaned.
+    df_raw : pandas.DataFrame
+        Original loaded data with normalized column names.
+    df_cleaned : pandas.DataFrame
+        Data after enforcing domain limits and dropping sparse columns.
+    df_imputed_base : pandas.DataFrame
+        Base data for Track A (retains predictor NaNs).
+    df_dropped : pandas.DataFrame
+        Base data for Track B (drops all rows containing NaNs).
+    load_meta : dict
+        Metadata tracking row drops at each cleaning stage.
     """
     df_raw = pd.read_csv(data_path)
 
@@ -118,8 +126,8 @@ def load_and_clean(data_path, target, limits):
     load_meta = {
         "n_raw":            len(df_raw),
         "n_cols":           df_raw.shape[1],
-        "n_target_dropped": len(df_raw) - len(df_base),        # rows with missing target
-        "n_domain_removed": len(df_base) - len(df_cleaned),    # domain constraint violations
+        "n_target_dropped": len(df_raw) - len(df_base), # rows with missing target
+        "n_domain_removed": len(df_base) - len(df_cleaned), # domain constraint violations
         "n_cleaned":        len(df_cleaned),
     }
     return df_raw, df_cleaned, df_imputed_base, df_dropped, load_meta
@@ -127,23 +135,19 @@ def load_and_clean(data_path, target, limits):
 
 def calculate_vif(df, numeric_cols):
     """
-    Calculates the Variance Inflation Factor (VIF) for each column in
-    numeric_cols using statsmodels.stats.outliers_influence.
-
-    VIF_i = 1 / (1 - R²_i), where R²_i is the R² from regressing predictor i
-    on all other predictors in numeric_cols. Only complete cases are used.
-
-    Categorical columns should be excluded before calling — pass only the
-    numeric predictors you want to assess for multicollinearity.
+    Calculates the Variance Inflation Factor (VIF) for numeric predictors.
 
     Parameters
     ----------
-    df           : Cleaned DataFrame (post-outlier removal, pre-encoding).
-    numeric_cols : List of numeric predictor column names to include.
+    df : pandas.DataFrame
+        Cleaned DataFrame (pre-encoding).
+    numeric_cols : list of str
+        Names of numeric predictor columns to evaluate.
 
     Returns
     -------
-    pd.DataFrame with columns ["Feature", "VIF"] sorted by VIF descending.
+        pandas.DataFrame
+        Table of features and their VIF scores, sorted descending.
     """
     if len(numeric_cols) < 2:
         print("  [INFO] VIF requires at least 2 numeric predictors — skipping.")
@@ -180,21 +184,21 @@ def calculate_vif(df, numeric_cols):
 
 def vif_drop_analysis(df, numeric_cols):
     """
-    Demonstrates OLS estimator instability by identifying the single
-    highest-VIF predictor, removing it, and re-computing VIF on the
-    remaining predictors. The side-by-side comparison reveals how
-    collinearity propagates through the (X'X)^(-1) matrix, inflating the
-    variance of every OLS coefficient estimate in the model.
+    Demonstrates OLS instability by removing the highest-VIF predictor and recomputing.
 
     Parameters
     ----------
-    df           : Cleaned DataFrame (post-outlier removal, pre-encoding).
-    numeric_cols : List of numeric predictor column names.
+    df : pandas.DataFrame
+        Cleaned DataFrame (pre-encoding).
+    numeric_cols : list of str
+        Names of numeric predictor columns.
 
     Returns
     -------
-    (top_feature, top_vif) : Name and VIF of the dropped predictor.
-                             Both are None when < 3 numeric columns.
+    top_feature : str or None
+        Name of the removed predictor (None if < 3 numeric columns).
+    top_vif : float or None
+        VIF of the removed predictor.
     """
     if len(numeric_cols) < 3:
         return None, None
@@ -217,13 +221,13 @@ def vif_drop_analysis(df, numeric_cols):
 
     # Identify the highest-VIF predictor
     top_feature = max(vif_full, key=lambda c: (vif_full[c] if np.isfinite(vif_full[c]) else np.inf))
-    top_vif     = vif_full[top_feature]
+    top_vif = vif_full[top_feature]
 
     # Re-compute VIF with that predictor removed — same rows as above
     reduced_cols = [c for c in numeric_cols if c != top_feature]
     X_reduced_df = base_df[reduced_cols].copy()
     X_reduced_df.insert(0, 'const', 1.0)
-    X_reduced    = X_reduced_df.values
+    X_reduced = X_reduced_df.values
 
     vif_reduced  = {
         col: variance_inflation_factor(X_reduced, i + 1)

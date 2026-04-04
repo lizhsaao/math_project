@@ -1,5 +1,5 @@
 """
-    Formats the final results into a comparison table and runs residual diagnostics.
+    Evaluation metrics, comparison tables, and residual diagnostic summaries.
 """
 import numpy as np
 import pandas as pd
@@ -12,19 +12,17 @@ def create_summary_table(results_a, results_b, models=None, single_track=False):
 
     Parameters
     ----------
-    results_a, results_b : Dicts mapping model name -> {"rmse", "r2"} for each track.
-    models               : Which models to include in the table.
-                           - None (default): all models present in results_a,
-                             in insertion order.
-                           - str: a single model name, e.g. "Lasso".
-                           - list[str]: an explicit ordered subset of model names.
-    single_track         : If True, renders one set of RMSE/R² columns labelled
-                           plainly ("RMSE", "R²") rather than per-track columns.
+    results_a, results_b : dict
+        Mapping of model names to {"rmse", "r2"} metrics for each track.
+    models : str or list of str, optional
+        Specific models to include. Defaults to all models in results_a.
+    single_track : bool, optional
+        If True, renders plain metric columns instead of Track A/B columns.
 
     Returns
     -------
-    pd.DataFrame with model name plus RMSE and R² columns (one set per track,
-    or a single set when single_track=True).
+    pandas.DataFrame
+        Comparison table of RMSE and R² scores.
     """
     if models is None:
         model_list = list(results_a.keys())
@@ -55,20 +53,18 @@ def create_summary_table(results_a, results_b, models=None, single_track=False):
 def residual_normality_descriptives(preds_a, y_va, preds_b=None, y_vb=None,
                                      single_track=False, models=None):
     """
-    Computes Skewness and Excess Kurtosis for the residuals of each fitted model.
-
-    Normality reference values: Skewness ≈ 0 (symmetric distribution),
-    Excess Kurtosis ≈ 0 (mesokurtic — normal tail weight).  Visual
-    inspection of Q-Q plots and histograms is the primary normality
-    diagnostic; these statistics quantify the extent of any departure.
+    Computes and prints Skewness and Excess Kurtosis for model residuals.
 
     Parameters
     ----------
-    preds_a, preds_b : Dicts mapping model name -> predicted array (Track A/B).
-    y_va, y_vb       : True test-set values (Track A/B). Must be in the same
-                       scale as preds (i.e. back-transformed if log was applied).
-    single_track     : If True only Track A results are printed.
-    models           : Ordered list of model names; defaults to preds_a.keys().
+    preds_a, preds_b : dict
+        Mapping of model names to predicted values.
+    y_va, y_vb : array-like
+        True test-set values in the original scale.
+    single_track : bool, optional
+        If True, only evaluates Track A.
+    models : list of str, optional
+        Ordered list of models to evaluate. Defaults to all in preds_a.
     """
     if models is None:
         models = list(preds_a.keys())
@@ -115,30 +111,30 @@ def residual_normality_descriptives(preds_a, y_va, preds_b=None, y_vb=None,
 def residual_outlier_profile(df_original, test_idx, y_true, y_pred,
                               target, model_name, top_pct=0.05):
     """
-    Isolates the top `top_pct` fraction of test observations by absolute error
-    and cross-references their categorical traits against the full test set.
-
-    Prints a per-column frequency table: population %, outlier %, and Δ pp
-    (percentage-point difference). A positive Δ means that subgroup is
-    over-represented among the worst predictions — i.e. the model fails
-    disproportionately for that category.
+    Calculates categorical over/under-representation in the highest absolute errors.
 
     Parameters
     ----------
-    df_original : DataFrame with original (pre-encoding) columns — pass df_imp.
-    test_idx    : Index labels of test rows in df_original (use X_va.index).
-    y_true      : True target values for the test set (array or Series).
-    y_pred      : Predicted values for the test set (numpy array).
-    target      : Name of the response variable column (excluded from profiling).
-    model_name  : Model label used in printed headers.
-    top_pct     : Fraction of highest-error observations to isolate (default 0.05).
+    df_original : pandas.DataFrame
+        Original data containing categorical columns (pre-encoding).
+    test_idx : pandas.Index
+        Index labels corresponding to the test set observations.
+    y_true : array-like
+        True target values for the test set.
+    y_pred : array-like
+        Predicted values for the test set.
+    target : str
+        Name of the response variable (excluded from profiling).
+    model_name : str
+        Model label used in printed output headers.
+    top_pct : float, optional
+        Fraction of highest-error observations to isolate (default 0.05).
 
     Returns
     -------
-    dict  {col: {"categories": [...], "delta_pp": [...],
-                 "pop_pct": [...], "out_pct": [...]}}
-    Returns an empty dict if no categorical predictors exist or the outlier
-    group is too small to be reliable.
+    outlier_stats : dict
+        Per-category percentage point differences (delta_pp). Returns an empty 
+        dict if no categorical features exist or the subset is too small.
     """
     df_test = df_original.loc[test_idx]
     cat_cols = [c for c in df_test.select_dtypes(include=["object", "category"]).columns

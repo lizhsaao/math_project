@@ -1,5 +1,5 @@
 """
-    Converts human-readable data into machine-readable matrices (X and y).
+    Transforms raw data into leak-free, machine-readable feature matrices and target vectors.
 """
 import numpy as np
 import pandas as pd
@@ -30,24 +30,23 @@ def preprocess_track(df, target, requires_imputation=False):
 
     Parameters
     ----------
-    df                  : DataFrame for the track (Track A or B).
-    target              : Name of the response variable column.
-    requires_imputation : If True, fill NaNs from training statistics.
-                          Set True for Track A (imputed), False for Track B
-                          (listwise-deleted, so no NaNs remain).
+    df : pandas.DataFrame
+        The input data track.
+    target : str
+        Name of the target/response column.
+    requires_imputation : bool, optional
+        If True, fills NaNs using train-set median/mode (default False).
 
     Returns
     -------
-    X_train, X_test : Encoded feature matrices (80 / 20 split).
-    y_train, y_test : Corresponding response vectors (log-transformed if
-                      skewness exceeded the threshold).
-    log_target      : True if log(y+1) was applied; False otherwise.
-                      When True the caller should back-transform predictions
-                      with numpy.expm1 before computing reported metrics/plots.
-                      X_test is locked — use X_train for all CV and tuning.
-    prep_log        : Dict with preprocessing decisions for report logging —
-                      skewness, log_target, imputed_cols, encoded_cols,
-                      n_total_dummies.
+    X_train, X_test : pandas.DataFrame
+        Encoded and scaled feature matrices (80/20 split).
+    y_train, y_test : pandas.Series
+        Target vectors (log-transformed if highly skewed).
+    log_target : bool
+        True if a log(y+1) transform was applied to the target.
+    prep_log : dict
+        Logging metadata (skewness, imputed/encoded cols, dummy counts).
     """
     # 1. Split fitst (Fixes Leakage)
     train_df, test_df = train_test_split(

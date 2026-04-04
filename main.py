@@ -32,7 +32,14 @@ ALL_MODELS = [
 ]
 
 class Tee:
-    """Writes to multiple streams at once — terminal and report file simultaneously."""
+    """
+    Duplicates standard output to multiple streams (e.g., terminal and file).
+
+    Parameters
+    ----------
+    *streams : file objects
+        Open output streams to write to simultaneously.
+    """
     def __init__(self, *streams):
         self.streams = streams
     def write(self, text):
@@ -45,15 +52,46 @@ class Tee:
 def _print_lasso_contrast(fitted_a, fitted_b, X_ta, X_tb,
                            vif_top_feature, vif_top_vif, single_track, f, tag=""):
     """
-    Prints a Lasso L_1 vs OLS collinearity narrative to the report file.
+    Writes a report section contrasting Lasso and OLS to explain how L1 
+    regularization resolves multicollinearity.
 
-    Shows the non-zero coefficient table for each track, cross-references the
-    highest-VIF feature from the VIF drop analysis, and explains how the L_1
-    penalty resolves the (X'X)^(-1) variance inflation that destabilises OLS.
+    Parameters
+    ----------
+    fitted_a, fitted_b : dict
+        Fitted models for Tracks A and B.
+    X_ta, X_tb : pandas.DataFrame
+        Training feature matrices.
+    vif_top_feature : str
+        Feature with the highest VIF.
+    vif_top_vif : float
+        The VIF value of the top feature.
+    single_track : bool
+        If True, only processes Track A.
+    f : file object
+        Open file stream for the report.
+    tag : str, optional
+        Dataset tag appended to plot filenames.
     """
     import pandas as pd
 
     def _coef_table(model, feat_names, label):
+        """
+        Formats and prints a table of retained and zeroed Lasso coefficients.
+
+        Parameters
+        ----------
+        model : sklearn.linear_model.Lasso
+            Fitted Lasso estimator.
+        feat_names : list of str
+            Feature names corresponding to model coefficients.
+        label : str
+            Display label for the output table (e.g., "Track A").
+
+        Returns
+        -------
+        coefs : pandas.Series
+            Mapping of all feature names to their coefficient values.
+        """
         coefs   = pd.Series(model.coef_, index=feat_names)
         nonzero = coefs[coefs != 0].sort_values(key=abs, ascending=False)
         zero    = coefs[coefs == 0]
@@ -98,8 +136,10 @@ def print_header(text, file=None):
 
     Parameters
     ----------
-    text : Header text to display.
-    file : Output stream; defaults to sys.stdout.
+    text : str
+        Header text.
+    file : file object, optional
+        Output stream (defaults to sys.stdout).
     """
     output = f"\n{'=' * WIDTH}\n{text.center(WIDTH, '=')}\n{'=' * WIDTH}\n"
     print(output, file=file or sys.stdout)
@@ -110,16 +150,10 @@ def main(models=None, datasets=None):
 
     Parameters
     ----------
-    models   : Which models to fit and evaluate.
-               - None (default): all models in ALL_MODELS.
-               - str: a single model name, e.g. "Random Forest".
-               - list[str]: an explicit ordered subset, e.g. ["Linear Regression", "Lasso"].
-               Only the requested models are tuned, fitted, and plotted, so omitting
-               slow models (e.g. "Random Forest") speeds up the run significantly.
-    datasets : Which datasets (filenames) to process.
-               - None (default): all entries in DATASET_CONFIGS.
-               - str: a single filename, e.g. "Housing.csv".
-               - list[str]: an explicit subset, e.g. ["Housing.csv"].
+    models : str or list of str, optional
+        Specific models to run (e.g., "Lasso"). Defaults to ALL_MODELS.
+    datasets : str or list of str, optional
+        Specific dataset filenames to process. Defaults to all in DATASET_CONFIGS.
     """
     # Resolve models parameter to an ordered list
     if models is None:
@@ -148,7 +182,7 @@ def main(models=None, datasets=None):
         # One subdirectory per dataset (e.g., results/StudentPerformanceFactors/)
         out_dir = RESULTS_DIR / filename.split('.')[0]
         out_dir.mkdir(parents=True, exist_ok=True)
-        tag = filename.split('.')[0]   # e.g. "StudentPerformanceFactors", "Housing", "winequality-red"
+        tag = filename.split('.')[0]
         report_path = out_dir / f"report_{tag}.txt"
 
         with open(report_path, "w") as f:
@@ -249,17 +283,27 @@ def main(models=None, datasets=None):
 
             def run_track(X_tr, X_te, y_tr, y_te, track_label):
                 """
-                Tunes and fits only the models in model_list, then evaluates each
-                on the held-out 20% test set.
+                Tunes, fits, and evaluates models on a single data track.
+
+                Parameters
+                ----------
+                X_tr, X_te : pandas.DataFrame
+                    Training and testing feature matrices.
+                y_tr, y_te : pandas.Series or numpy.ndarray
+                    Training and testing target vectors.
+                track_label : str
+                    Logging label (e.g., "Track A").
 
                 Returns
                 -------
-                results  : dict  model_name -> {"rmse", "r2"}
-                preds    : dict  model_name -> y_pred array
-                histories: dict  tuning key -> history list
-                           Keys: "DT" | "RF" | "Lasso" (only present if tuning ran)
-                fitted   : dict  model_name -> fitted estimator
-                           Only models with tunable hyperparameters are stored here.
+                results : dict
+                    Model metrics (RMSE, R^2).
+                preds : dict
+                    Model predictions.
+                histories : dict
+                    Tuning histories for DT, RF, or Lasso.
+                fitted : dict
+                    Fitted estimator objects.
                 """
                 # --- Conditional tuning (only for requested models) ---
                 histories = {}
@@ -313,7 +357,7 @@ def main(models=None, datasets=None):
                 results_b, preds_b, hist_b, fitted_b = run_track(X_tb, X_vb, y_tb, y_vb, "Track B")
 
             # Back-transform log(y+1) predictions using expm1 for final metrics and plots
-            # Ensures RMSE and R² are reported in the original target scale
+            # Ensures RMSE and R^2 are reported in the original target scale
             if log_target:
                 y_va_disp = np.expm1(y_va)
                 preds_a_disp = {n: np.expm1(p) for n, p in preds_a.items()}

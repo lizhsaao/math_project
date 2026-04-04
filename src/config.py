@@ -1,6 +1,33 @@
 """
-    Central configuration: file paths, dataset-specific cleaning rules,
-    and global ML hyperparameters.
+    Central configuration for file paths, dataset schema rules, and machine learning hyperparameters.
+
+    Constants
+    ---------
+    WIDTH : int
+        Standard console width for printing headers.
+    BASE_DIR, DATA_DIR, RESULTS_DIR : pathlib.Path
+        Absolute paths for project root, input data, and output artifacts.
+    DATASET_CONFIGS : dict
+        Mapping of dataset filenames to their specific configurations:
+            - target : str, name of the response variable.
+            - bin_strategy : str, histogram binning method ('unit', 'integer', 'fd').
+            - limits : dict, mapping of column names to upper-bound limits and error labels.
+    SPARSITY_THRESHOLD : float
+        Maximum acceptable missing value proportion; columns above this are dropped.
+    LOG_SKEWNESS_THRESHOLD : float
+        Absolute skewness limit; targets exceeding this receive a log(y+1) transform.
+    RANDOM_STATE : int
+        Global seed for reproducible splits and initializations.
+    TEST_SIZE : float
+        Proportion of data allocated to the hold-out test set (80/20 split).
+    CV_FOLDS : int
+        Number of cross-validation folds used for hyperparameter tuning.
+    DEPTHS : list of int
+        Candidate maximum tree depths for Decision Tree tuning.
+    N_ESTIMATORS : list of int
+        Candidate forest sizes for Random Forest tuning.
+    LASSO_ALPHAS : list of float
+        Log-spaced candidate regularization strengths for Lasso tuning.
 """
 import numpy as np
 from pathlib import Path
@@ -57,7 +84,7 @@ DATASET_CONFIGS = {
 }
 
 # Drop sparse columns before Track A/B split to prevent low-coverage indicators from skewing Track B.
-SPARSITY_THRESHOLD = 0.20   # 20 %
+SPARSITY_THRESHOLD = 0.20 # 20 %
 
 # Apply log(y+1) transform if target skewness exceeds threshold; 
 # back-transform for all reported metrics and plots.
