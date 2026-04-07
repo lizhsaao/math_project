@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
 from scipy.stats import probplot
+from pathlib import Path
 
 # --- Style constants matching the notebook ---
 _COL_A   = "steelblue"    # Track A
@@ -28,6 +29,24 @@ def _save(fig, output_path):
     """
     fig.savefig(output_path, bbox_inches="tight", dpi=150)
     plt.close(fig)
+
+
+def _get_track_path(output_path, track_suffix):
+    """
+    Injects a track suffix (e.g., '_TrackA') into the filename before the extension.
+
+    Parameters
+    ----------
+    output_path : str or pathlib.Path
+        Original file path.
+    track_suffix : str
+        Suffix to append (e.g., '_TrackA').
+    """
+    if not track_suffix:
+        return output_path
+    
+    p = Path(output_path)
+    return str(p.with_name(f"{p.stem}{track_suffix}{p.suffix}"))
 
 
 def plot_exam_score_distribution(df, target, output_path, bin_strategy="fd"):
@@ -98,27 +117,26 @@ def plot_correlation_with_target(df_a, df_b, target, output_path, single_track=F
         If True, renders only Track A.
     """
     corr_a = df_a.corr(numeric_only=True)[target].drop(target).sort_values()
-    corr_b = df_b.corr(numeric_only=True)[target].drop(target).sort_values()
-
+    
     if single_track:
-        fig, ax = subplots(1, 1, figsize=(7, 4))
-        _tracks = [(ax, corr_a, _COL_A, "All Data")]
+        _tracks = [(corr_a, _COL_A, "Correlation with Target", "")]
     else:
-        fig, axes = subplots(1, 2, figsize=(12, 4))
-        _tracks = list(zip(axes, [corr_a, corr_b], [_COL_A, _COL_B],
-                           ["Track A (Imputed)", "Track B (Dropped)"]))
+        corr_b = df_b.corr(numeric_only=True)[target].drop(target).sort_values()
+        _tracks = [
+            (corr_a, _COL_A, "Correlation with Target (Track A: Imputed)", "_TrackA"),
+            (corr_b, _COL_B, "Correlation with Target (Track B: Dropped)", "_TrackB")
+        ]
 
-    for ax, corr, col, title in _tracks:
+    for corr, col, title, suffix in _tracks:
+        fig, ax = subplots(figsize=(7, 4))
         ax.barh(corr.index, corr.values, color=col, alpha=0.85)
         ax.axvline(0, color="black", linewidth=0.8)
         ax.set_title(title, fontsize=12)
         ax.set_xlabel(f"Pearson r with {target}")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-
-    fig.suptitle(f"Correlation with {target}", fontsize=13)
-    plt.tight_layout()
-    _save(fig, output_path)
+        plt.tight_layout()
+        _save(fig, _get_track_path(output_path, suffix))
 
 
 def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path,
@@ -142,15 +160,16 @@ def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name,
         Target variable name for axis labels.
     """
     if single_track:
-        fig, ax = subplots(1, 1, figsize=(6, 5))
-        _tracks = [(ax, y_true_a, y_pred_a, _COL_A, "All Data")]
+        _tracks = [(y_true_a, y_pred_a, _COL_A, f"Actual vs. Predicted — {model_name}", "")]
     else:
-        fig, axes = subplots(1, 2, figsize=(12, 5), sharey=True)
-        _tracks = list(zip(axes, [y_true_a, y_true_b], [y_pred_a, y_pred_b],
-                           [_COL_A, _COL_B], ["Track A (Imputed)", "Track B (Dropped)"]))
+        _tracks = [
+            (y_true_a, y_pred_a, _COL_A, f"Actual vs. Predicted — {model_name} (Track A)", "_TrackA"),
+            (y_true_b, y_pred_b, _COL_B, f"Actual vs. Predicted — {model_name} (Track B)", "_TrackB")
+        ]
 
     _label = target.replace("_", " ")
-    for ax, y_true, y_pred, col, title in _tracks:
+    for y_true, y_pred, col, title, suffix in _tracks:
+        fig, ax = subplots(figsize=(6, 5))
         ax.scatter(y_true, y_pred, color=col, alpha=0.4, s=14, edgecolors="none")
         lo = min(y_true.min(), y_pred.min()) - 0.5
         hi = max(y_true.max(), y_pred.max()) + 0.5
@@ -161,10 +180,8 @@ def plot_actual_vs_predicted(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name,
         ax.legend(fontsize=8)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-
-    fig.suptitle(f"Actual vs. Predicted — {model_name}", fontsize=13)
-    plt.tight_layout()
-    _save(fig, output_path)
+        plt.tight_layout()
+        _save(fig, _get_track_path(output_path, suffix))
 
 
 def plot_tuning_curve(history_a, history_b, output_path,
@@ -195,27 +212,25 @@ def plot_tuning_curve(history_a, history_b, output_path,
         If True, renders only Track A.
     """
     if single_track:
-        fig, ax = subplots(1, 1, figsize=(7, 5))
-        _tracks = [(ax, history_a, _COL_A, lr_rmse_a, "All Data")]
+        _tracks = [(history_a, _COL_A, lr_rmse_a, suptitle, "")]
     else:
-        fig, axes = subplots(1, 2, figsize=(13, 5), sharey=True)
-        _tracks = list(zip(axes, [history_a, history_b], [_COL_A, _COL_B],
-                           [lr_rmse_a, lr_rmse_b], ["Track A (Imputed)", "Track B (Dropped)"]))
+        _tracks = [
+            (history_a, _COL_A, lr_rmse_a, f"{suptitle} (Track A)", "_TrackA"),
+            (history_b, _COL_B, lr_rmse_b, f"{suptitle} (Track B)", "_TrackB")
+        ]
 
-    for ax, history, col, lr_rmse, title in _tracks:
+    for history, col, lr_rmse, title, suffix in _tracks:
+        fig, ax = subplots(figsize=(7, 5))
         df       = pd.DataFrame(history)
         x_vals   = df[x_key].values
         rmse_arr = df["rmse"].values
         std_arr  = df["std"].values
 
-        # 1-SE rule: horizontal line at min RMSE; interpolate the exact x where
-        # the lower ±1 s.d. boundary (rmse - std) crosses that line going left.
         min_idx   = int(np.argmin(rmse_arr))
         threshold = float(rmse_arr[min_idx])
         lower_arr = rmse_arr - std_arr
 
-        # Linear interpolation between the last point above and first point below
-        cross_x = float(x_vals[0])   # fallback: first point already below
+        cross_x = float(x_vals[0])
         for i in range(len(x_vals) - 1):
             if lower_arr[i] > threshold and lower_arr[i + 1] <= threshold:
                 t = (threshold - lower_arr[i]) / (lower_arr[i + 1] - lower_arr[i])
@@ -240,10 +255,8 @@ def plot_tuning_curve(history_a, history_b, output_path,
         ax.legend(fontsize=8)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-
-    fig.suptitle(suptitle, fontsize=13)
-    plt.tight_layout()
-    _save(fig, output_path)
+        plt.tight_layout()
+        _save(fig, _get_track_path(output_path, suffix))
 
 
 def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_path,
@@ -267,15 +280,16 @@ def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_pa
         Target variable name for axis labels.
     """
     if single_track:
-        fig, ax = subplots(1, 1, figsize=(7, 4))
-        _tracks = [(ax, y_true_a, y_pred_a, _COL_A, "All Data")]
+        _tracks = [(y_true_a, y_pred_a, _COL_A, f"Residuals vs. Predicted — {model_name}", "")]
     else:
-        fig, axes = subplots(1, 2, figsize=(12, 4), sharey=True)
-        _tracks = list(zip(axes, [y_true_a, y_true_b], [y_pred_a, y_pred_b],
-                           [_COL_A, _COL_B], ["Track A (Imputed)", "Track B (Dropped)"]))
+        _tracks = [
+            (y_true_a, y_pred_a, _COL_A, f"Residuals vs. Predicted — {model_name} (Track A)", "_TrackA"),
+            (y_true_b, y_pred_b, _COL_B, f"Residuals vs. Predicted — {model_name} (Track B)", "_TrackB")
+        ]
 
     _label = target.replace("_", " ")
-    for ax, y_true, y_pred, col, title in _tracks:
+    for y_true, y_pred, col, title, suffix in _tracks:
+        fig, ax = subplots(figsize=(7, 4))
         resid = y_true.values - y_pred
         ax.scatter(y_pred, resid, color=col, alpha=0.4, s=14, edgecolors="none")
         ax.axhline(0, linestyle=":", color=_COL_REF, linewidth=1.5)
@@ -284,10 +298,8 @@ def plot_residuals(y_true_a, y_pred_a, y_true_b, y_pred_b, model_name, output_pa
         ax.set_title(title, fontsize=12)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-
-    fig.suptitle(f"Residuals vs. Predicted — {model_name}", fontsize=13)
-    plt.tight_layout()
-    _save(fig, output_path)
+        plt.tight_layout()
+        _save(fig, _get_track_path(output_path, suffix))
 
 
 def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output_path,
@@ -309,27 +321,25 @@ def plot_feature_importance(model_a, model_b, feat_names_a, feat_names_b, output
         If True, renders only Track A.
     """
     if single_track:
-        fig, ax = subplots(1, 1, figsize=(8, 6))
-        _tracks = [(ax, model_a, feat_names_a, _COL_A, "All Data")]
+        _tracks = [(model_a, feat_names_a, _COL_A, f"Top 10 Feature Importances — {model_name}", "")]
     else:
-        fig, axes = subplots(1, 2, figsize=(14, 6))
-        _tracks = list(zip(axes, [model_a, model_b], [feat_names_a, feat_names_b],
-                           [_COL_A, _COL_B], ["Track A (Imputed)", "Track B (Dropped)"]))
+        _tracks = [
+            (model_a, feat_names_a, _COL_A, f"Top 10 Feature Importances — {model_name} (Track A)", "_TrackA"),
+            (model_b, feat_names_b, _COL_B, f"Top 10 Feature Importances — {model_name} (Track B)", "_TrackB")
+        ]
 
-    for ax, model, names, col, title in _tracks:
+    for model, names, col, title, suffix in _tracks:
+        fig, ax = subplots(figsize=(8, 6))
         importances = pd.Series(model.feature_importances_, index=names)
         top10 = importances.sort_values(ascending=True).tail(10)
 
-        # Horizontal bars; ascending sort + tail gives longest bar at the top
         ax.barh(top10.index, top10.values, color=col, alpha=0.85)
         ax.set_title(title, fontsize=12)
         ax.set_xlabel("Importance")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-
-    fig.suptitle(f"Top 10 Feature Importances — {model_name}", fontsize=13)
-    plt.tight_layout()
-    _save(fig, output_path)
+        plt.tight_layout()
+        _save(fig, _get_track_path(output_path, suffix))
 
 
 def plot_lasso_tuning_curve(history_a, history_b, output_path,
@@ -352,14 +362,15 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
         If True, renders only Track A.
     """
     if single_track:
-        fig, ax = subplots(1, 1, figsize=(7, 5))
-        _tracks = [(ax, history_a, _COL_A, lr_rmse_a, "All Data")]
+        _tracks = [(history_a, _COL_A, lr_rmse_a, "CV RMSE vs. Lasso α", "")]
     else:
-        fig, axes = subplots(1, 2, figsize=(13, 5), sharey=True)
-        _tracks = list(zip(axes, [history_a, history_b], [_COL_A, _COL_B],
-                           [lr_rmse_a, lr_rmse_b], ["Track A (Imputed)", "Track B (Dropped)"]))
+        _tracks = [
+            (history_a, _COL_A, lr_rmse_a, "CV RMSE vs. Lasso α (Track A)", "_TrackA"),
+            (history_b, _COL_B, lr_rmse_b, "CV RMSE vs. Lasso α (Track B)", "_TrackB")
+        ]
 
-    for ax, history, col, lr_rmse, title in _tracks:
+    for history, col, lr_rmse, title, suffix in _tracks:
+        fig, ax = subplots(figsize=(7, 5))
         df       = pd.DataFrame(history)
         x_vals   = df["alpha"].values
         rmse_arr = df["rmse"].values
@@ -369,7 +380,6 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
         threshold = float(rmse_arr[min_idx])
         lower_arr = rmse_arr - std_arr
 
-        # 1-SE rule for Lasso: scan right to left for the RIGHTMOST crossing
         cross_x = float(x_vals[min_idx])
         for i in range(len(x_vals) - 1, 0, -1):
             if lower_arr[i] > threshold and lower_arr[i - 1] <= threshold:
@@ -384,15 +394,11 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
         ax.fill_between(x_vals, lower_arr, rmse_arr + std_arr,
                         alpha=0.15, color=col, label="±1 s.d.")
         
-        # Min RMSE line (Red)
         ax.axhline(threshold, linestyle="--", color="crimson", linewidth=1.2,
                    label=f"Min RMSE ({threshold:.3f})")
-        
-        # 1-SE crossing (Orange)
         ax.axvline(cross_x, linestyle="--", color=_COL_REF,
                    label=f"1-SE crossing = {cross_x:.3g}")
 
-        # LR baseline (Green dotted)
         if lr_rmse is not None:
             ax.axhline(lr_rmse, linestyle=":", color=_COL_LR, linewidth=1.5,
                        label=f"LR baseline  ({lr_rmse:.3f})")
@@ -404,10 +410,8 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
         ax.legend(fontsize=8)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        
-    fig.suptitle("CV RMSE vs. Lasso α  (10-fold CV)", fontsize=13)
-    plt.tight_layout()
-    _save(fig, output_path)
+        plt.tight_layout()
+        _save(fig, _get_track_path(output_path, suffix))
 
 
 def plot_lasso_coefficients(model_a, model_b, feat_names_a, feat_names_b, output_path,
@@ -427,14 +431,15 @@ def plot_lasso_coefficients(model_a, model_b, feat_names_a, feat_names_b, output
         If True, renders only Track A.
     """
     if single_track:
-        fig, ax = subplots(1, 1, figsize=(8, 6))
-        _tracks = [(ax, model_a, feat_names_a, "All Data")]
+        _tracks = [(model_a, feat_names_a, "Lasso Coefficients (All Data)", "")]
     else:
-        fig, axes = subplots(1, 2, figsize=(14, 6))
-        _tracks = list(zip(axes, [model_a, model_b], [feat_names_a, feat_names_b],
-                           ["Track A (Imputed)", "Track B (Dropped)"]))
+        _tracks = [
+            (model_a, feat_names_a, "Lasso Coefficients (Track A)", "_TrackA"),
+            (model_b, feat_names_b, "Lasso Coefficients (Track B)", "_TrackB")
+        ]
 
-    for ax, model, names, title in _tracks:
+    for model, names, title, suffix in _tracks:
+        fig, ax = subplots(figsize=(8, 6))
         coefs = pd.Series(model.coef_, index=names)
         non_zero = coefs[coefs != 0].sort_values()
 
@@ -448,11 +453,8 @@ def plot_lasso_coefficients(model_a, model_b, feat_names_a, feat_names_b, output
         ax.set_xlabel("Coefficient")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-
-    fig.suptitle("Lasso Coefficients (non-zero only)", fontsize=13)
-    plt.tight_layout()
-    _save(fig, output_path)
-
+        plt.tight_layout()
+        _save(fig, _get_track_path(output_path, suffix))
 
 def plot_outlier_profile(outlier_stats, model_name, output_path):
     """
@@ -540,22 +542,19 @@ def plot_residual_normality(y_true_a, y_pred_a, y_true_b, y_pred_b,
         If True, renders only Track A.
     """
     if single_track:
-        tracks = [("All Data", y_true_a, y_pred_a, _COL_A)]
+        _tracks = [("All Data", y_true_a, y_pred_a, _COL_A, "")]
     else:
-        tracks = [
-            ("Track A (Imputed)", y_true_a, y_pred_a, _COL_A),
-            ("Track B (Dropped)", y_true_b, y_pred_b, _COL_B),
+        _tracks = [
+            ("Track A (Imputed)", y_true_a, y_pred_a, _COL_A, "_TrackA"),
+            ("Track B (Dropped)", y_true_b, y_pred_b, _COL_B, "_TrackB")
         ]
-    nrows = len(tracks)
-    fig, axes = subplots(nrows, 2, figsize=(10, 4 * nrows))
-    if nrows == 1:
-        axes = axes[np.newaxis, :]   # force 2-D indexing
 
-    for row, (label, y_true, y_pred, col) in enumerate(tracks):
+    for label, y_true, y_pred, col, suffix in _tracks:
+        fig, axes = subplots(1, 2, figsize=(10, 4))
         resid = np.asarray(y_true) - np.asarray(y_pred)
 
         # --- Q-Q plot ---
-        ax_qq = axes[row, 0]
+        ax_qq = axes[0]
         (osm, osr), (slope, intercept, _) = probplot(resid, dist="norm")
         ax_qq.scatter(osm, osr, s=12, alpha=0.5, color=col, edgecolors="none")
         line_x = np.array([osm.min(), osm.max()])
@@ -563,28 +562,26 @@ def plot_residual_normality(y_true_a, y_pred_a, y_true_b, y_pred_b,
                    "--", color=_COL_REF, linewidth=1.5, label="45° ref")
         ax_qq.set_xlabel("Theoretical Quantiles")
         ax_qq.set_ylabel("Residual Quantiles")
-        ax_qq.set_title(f"Q-Q — {label}", fontsize=10)
+        ax_qq.set_title(f"Q-Q", fontsize=10)
         ax_qq.legend(fontsize=8)
         ax_qq.spines["top"].set_visible(False)
         ax_qq.spines["right"].set_visible(False)
 
-        # --- Residual histogram with Normal PDF overlay ---
-        ax_hist = axes[row, 1]
+        # --- Residual histogram ---
+        ax_hist = axes[1]
         ax_hist.hist(resid, bins="fd", density=True,
                      color=col, alpha=0.7, edgecolor="white")
         mu, sig = resid.mean(), resid.std()
         x = np.linspace(mu - 4 * sig, mu + 4 * sig, 300)
-        pdf = (1 / (sig * np.sqrt(2 * np.pi))) * np.exp(
-            -0.5 * ((x - mu) / sig) ** 2)
-        ax_hist.plot(x, pdf, "r-", linewidth=2,
-                     label=f"N({mu:.2f}, {sig:.2f}²)")
+        pdf = (1 / (sig * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mu) / sig) ** 2)
+        ax_hist.plot(x, pdf, "r-", linewidth=2, label=f"N({mu:.2f}, {sig:.2f}²)")
         ax_hist.set_xlabel("Residual")
         ax_hist.set_ylabel("Density")
-        ax_hist.set_title(f"Histogram — {label}", fontsize=10)
+        ax_hist.set_title("Histogram", fontsize=10)
         ax_hist.legend(fontsize=8)
         ax_hist.spines["top"].set_visible(False)
         ax_hist.spines["right"].set_visible(False)
 
-    fig.suptitle(f"Residual Normality — {model_name}", fontsize=13)
-    plt.tight_layout()
-    _save(fig, output_path)
+        fig.suptitle(f"Residual Normality — {model_name} ({label})", fontsize=13)
+        plt.tight_layout()
+        _save(fig, _get_track_path(output_path, suffix))
