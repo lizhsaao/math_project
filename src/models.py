@@ -29,7 +29,7 @@ def tune_decision_tree(X_train, y_train, depths):
     best_depth : int
         Shallowest depth within 1 SE of the minimum CV RMSE.
     history : list of dict
-        Tuning metrics per depth (depth, rmse, std).
+        Tuning metrics per depth (depth, rmse, se).
     """
     kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     history = []
@@ -40,16 +40,17 @@ def tune_decision_tree(X_train, y_train, depths):
             X_train, y_train, cv=kf, scoring='neg_root_mean_squared_error',
             n_jobs=-1
         )
-        history.append({"depth": d, "rmse": float(-np.mean(scores)),
-                        "std": float(np.std(-scores))})
+        history.append({"depth": d, 
+                        "rmse": float(-np.mean(scores)),
+                        "se": float(np.std(-scores, ddof=1) / np.sqrt(CV_FOLDS))})
 
-    # 1-SE rule: shallowest depth whose lower ±1 s.d. bound touches the minimum RMSE.
-    # Equivalent to finding where (rmse - std) ≤ min_rmse on the tuning curve.
+    # 1-SE rule: select the shallowest depth whose mean CV RMSE is within
+    # one standard error of the minimum mean CV RMSE.
     rmse_arr  = np.array([h['rmse'] for h in history])
-    std_arr   = np.array([h['std']  for h in history])
-    min_rmse  = float(rmse_arr[int(np.argmin(rmse_arr))])
-    lower_arr = rmse_arr - std_arr
-    best_depth = next(h['depth'] for h, lb in zip(history, lower_arr) if lb <= min_rmse)
+    se_arr = np.array([h['se'] for h in history])
+    min_idx = int(np.argmin(rmse_arr))
+    threshold = float(rmse_arr[min_idx] + se_arr[min_idx])
+    best_depth = next(h['depth'] for h in history if h['rmse'] <= threshold)
     return best_depth, history
 
 def tune_random_forest(X_train, y_train, n_estimators_list):
@@ -70,7 +71,7 @@ def tune_random_forest(X_train, y_train, n_estimators_list):
     best_n : int
         Fewest trees within 1 SE of the minimum CV RMSE.
     history : list of dict
-        Tuning metrics per forest size (n_estimators, rmse, std).
+        Tuning metrics per forest size (n_estimators, rmse, se).
     """
     kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     history = []
@@ -84,15 +85,16 @@ def tune_random_forest(X_train, y_train, n_estimators_list):
         history.append({
             "n_estimators": n,
             "rmse": float(-np.mean(scores)),
-            "std":  float(np.std(-scores))
+            "se": float(np.std(-scores, ddof=1) / np.sqrt(CV_FOLDS))
         })
 
-    # 1-SE rule: fewest trees whose lower ±1 s.d. bound touches the minimum RMSE.
+    # 1-SE rule: select the fewest trees whose mean CV RMSE is within
+    # one standard error of the minimum mean CV RMSE.    
     rmse_arr  = np.array([h['rmse'] for h in history])
-    std_arr   = np.array([h['std']  for h in history])
-    min_rmse  = float(rmse_arr[int(np.argmin(rmse_arr))])
-    lower_arr = rmse_arr - std_arr
-    best_n = next(h['n_estimators'] for h, lb in zip(history, lower_arr) if lb <= min_rmse)
+    se_arr = np.array([h['se'] for h in history])
+    min_idx = int(np.argmin(rmse_arr))
+    threshold = float(rmse_arr[min_idx] + se_arr[min_idx])
+    best_n = next(h['n_estimators'] for h in history if h['rmse'] <= threshold)
     return best_n, history
 
 
@@ -114,7 +116,7 @@ def tune_lasso(X_train, y_train, alphas):
     best_alpha : float
         Largest (most regularized) alpha within 1 SE of the minimum CV RMSE.
     history : list of dict
-        Tuning metrics per alpha (alpha, rmse, std).
+        Tuning metrics per alpha (alpha, rmse, se).
     """
     kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     history = []
@@ -128,21 +130,21 @@ def tune_lasso(X_train, y_train, alphas):
         )
         history.append({
             "alpha": float(alpha),
-            "rmse":  float(-np.mean(scores)),
-            "std":   float(np.std(-scores)),
+            "rmse": float(-np.mean(scores)),
+            "se": float(np.std(-scores, ddof=1) / np.sqrt(CV_FOLDS)),
         })
 
-    # 1-SE rule for Lasso: prefer the LARGEST alpha (most regularised) whose
-    # lower ±1 s.d. bound touches the minimum RMSE. Scan history in reverse so
-    # the first qualifying match is the largest qualifying alpha.
+    # 1-SE rule for Lasso: prefer the largest alpha (most regularised) whose
+    # mean CV RMSE is within one standard error of the minimum mean CV RMSE.
+    # Scan history in reverse so the first qualifying match is the largest qualifying alpha.
     rmse_arr  = np.array([h['rmse'] for h in history])
-    std_arr   = np.array([h['std']  for h in history])
-    min_rmse  = float(rmse_arr[int(np.argmin(rmse_arr))])
-    lower_arr = rmse_arr - std_arr
+    se_arr = np.array([h['se'] for h in history])
+    min_idx = int(np.argmin(rmse_arr))
+    threshold = float(rmse_arr[min_idx] + se_arr[min_idx])
     best_alpha = next(
         h['alpha']
-        for h, lb in zip(reversed(history), lower_arr[::-1])
-        if lb <= min_rmse
+        for h in reversed(history)
+        if h['rmse'] <= threshold
     )
     return best_alpha, history
 
