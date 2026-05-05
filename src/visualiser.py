@@ -1,6 +1,6 @@
 """
     Diagnostic plots: EDA (target distribution, correlations), actual vs. predicted,
-    residual distributions, tree depth-scan curves, and feature importances.
+    residual distributions, hyperparameter tuning curves, and feature importances.
 """
 import numpy as np
 import pandas as pd
@@ -190,8 +190,8 @@ def plot_tuning_curve(history_a, history_b, output_path,
                       suptitle="CV RMSE vs. Tree Depth  (10-fold CV)",
                       n_folds=10, single_track=False):
     """
-    Plots a CV RMSE tuning curve with ±1 s.d. bands and a 1-SE threshold line.
-
+    Plots a CV RMSE tuning curve with ±1 s.e. bands and a 1-SE threshold line.
+    
     Parameters
     ----------
     history_a, history_b : list of dict
@@ -224,26 +224,26 @@ def plot_tuning_curve(history_a, history_b, output_path,
         df       = pd.DataFrame(history)
         x_vals   = df[x_key].values
         rmse_arr = df["rmse"].values
-        std_arr  = df["std"].values
+        se_arr  = df["se"].values
 
         min_idx   = int(np.argmin(rmse_arr))
-        threshold = float(rmse_arr[min_idx])
-        lower_arr = rmse_arr - std_arr
+        threshold = float(rmse_arr[min_idx] + se_arr[min_idx])
+        lower_arr = rmse_arr - se_arr
 
         cross_x = float(x_vals[0])
-        for i in range(len(x_vals) - 1):
-            if lower_arr[i] > threshold and lower_arr[i + 1] <= threshold:
-                t = (threshold - lower_arr[i]) / (lower_arr[i + 1] - lower_arr[i])
-                cross_x = float(x_vals[i] + t * (x_vals[i + 1] - x_vals[i]))
+        for x, rmse in zip(x_vals, rmse_arr):
+            if rmse <= threshold:
+                cross_x = float(x)
                 break
 
         ax.plot(x_vals, rmse_arr, "o-", color=col, markersize=5, label="CV RMSE")
-        ax.fill_between(x_vals, lower_arr, rmse_arr + std_arr,
-                        alpha=0.15, color=col, label="±1 s.d.")
+        ax.fill_between(x_vals, lower_arr, rmse_arr + se_arr,
+                        alpha=0.15, color=col, label="±1 s.e.")
+        
         ax.axhline(threshold, linestyle="--", color="crimson", linewidth=1.2,
-                   label=f"Min RMSE ({threshold:.3f})")
+                label=f"1-SE threshold ({threshold:.3f})")
         ax.axvline(cross_x, linestyle="--", color=_COL_REF,
-                   label=f"1-SE crossing = {cross_x:.1f}")
+                label=f"1-SE selected = {cross_x:.1f}")
 
         if lr_rmse is not None:
             ax.axhline(lr_rmse, linestyle=":", color=_COL_LR, linewidth=1.5,
@@ -374,30 +374,26 @@ def plot_lasso_tuning_curve(history_a, history_b, output_path,
         df       = pd.DataFrame(history)
         x_vals   = df["alpha"].values
         rmse_arr = df["rmse"].values
-        std_arr  = df["std"].values
+        se_arr  = df["se"].values
 
         min_idx   = int(np.argmin(rmse_arr))
-        threshold = float(rmse_arr[min_idx])
-        lower_arr = rmse_arr - std_arr
+        threshold = float(rmse_arr[min_idx] + se_arr[min_idx])
+        lower_arr = rmse_arr - se_arr
 
         cross_x = float(x_vals[min_idx])
-        for i in range(len(x_vals) - 1, 0, -1):
-            if lower_arr[i] > threshold and lower_arr[i - 1] <= threshold:
-                t = (threshold - lower_arr[i - 1]) / (lower_arr[i] - lower_arr[i - 1])
-                log_cross = np.log10(x_vals[i - 1]) + t * (
-                    np.log10(x_vals[i]) - np.log10(x_vals[i - 1])
-                )
-                cross_x = float(10 ** log_cross)
+        for x, rmse in zip(x_vals[::-1], rmse_arr[::-1]):
+            if rmse <= threshold:
+                cross_x = float(x)
                 break
 
         ax.plot(x_vals, rmse_arr, "o-", color=col, markersize=4, label="CV RMSE")
-        ax.fill_between(x_vals, lower_arr, rmse_arr + std_arr,
-                        alpha=0.15, color=col, label="±1 s.d.")
+        ax.fill_between(x_vals, lower_arr, rmse_arr + se_arr,
+                        alpha=0.15, color=col, label="±1 s.e.")
         
         ax.axhline(threshold, linestyle="--", color="crimson", linewidth=1.2,
-                   label=f"Min RMSE ({threshold:.3f})")
+                label=f"1-SE threshold ({threshold:.3f})")
         ax.axvline(cross_x, linestyle="--", color=_COL_REF,
-                   label=f"1-SE crossing = {cross_x:.3g}")
+                label=f"1-SE selected = {cross_x:.3g}")
 
         if lr_rmse is not None:
             ax.axhline(lr_rmse, linestyle=":", color=_COL_LR, linewidth=1.5,
