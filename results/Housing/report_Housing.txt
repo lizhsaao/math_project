@@ -1,0 +1,242 @@
+
+==================================================
+=========Processing Dataset: Housing.csv==========
+==================================================
+
+
+==================================================
+================1. Load & Inspect=================
+==================================================
+
+  Dataset:    545 rows × 13 columns (raw)
+  Clean base: 545 rows
+
+
+--- Data Integrity Inspection ---
+  [PASS] price (Negative Check): 0 issues
+  [PASS] area (Negative Check): 0 issues
+  [PASS] Area > 20,000 sqft: 0 issues
+  [PASS] bedrooms (Negative Check): 0 issues
+  [PASS] Bedrooms > 10: 0 issues
+  [PASS] bathrooms (Negative Check): 0 issues
+  [PASS] Bathrooms > 10: 0 issues
+  [PASS] stories (Negative Check): 0 issues
+  [PASS] Stories > 5: 0 issues
+  [PASS] parking (Negative Check): 0 issues
+
+--- Categorical Schema (Manual Review) ---
+  mainroad: no, yes
+  guestroom: no, yes
+  basement: no, yes
+  hotwaterheating: no, yes
+  airconditioning: no, yes
+  prefarea: no, yes
+  furnishingstatus: furnished, semi-furnished, unfurnished
+Schema confirmed. Proceeding...
+
+
+--- VIF (Variance Inflation Factor, n=545 complete cases) ---
+  Feature                                     VIF  Note
+  ------------------------------------------------------------
+  bedrooms                                   1.32  
+  stories                                    1.26  
+  bathrooms                                  1.25  
+  area                                       1.17  
+  parking                                    1.16  
+
+  [VIF > 5 = moderate collinearity;  VIF > 10 = severe]
+
+--- VIF Drop Analysis: Demonstrating OLS Estimator Instability ---
+  Highest-VIF predictor: 'bedrooms'  (VIF = 1.32)
+  Removing 'bedrooms' and re-computing VIF on remaining predictors:
+
+  Feature                                 VIF (full)   VIF (reduced)     Δ VIF
+  ----------------------------------------------------------------------------
+  bedrooms                                      1.32       [removed]         —
+  stories                                       1.26            1.12     -0.14
+  bathrooms                                     1.25            1.17     -0.08
+  area                                          1.17            1.17     -0.00
+  parking                                       1.16            1.16     -0.00
+
+  [OLS Collinearity Effect]
+  Removing a single predictor shifted the VIF of 4/4 remaining feature(s).
+  High VIF inflates Var(β^) ∝ (X'X)^(-1): correlated predictors share explanatory
+  power, making OLS coefficients sensitive to small perturbations in X.
+  -> See Lasso Contrast in Section 4 for how L_1 regularisation resolves this.
+  [Plot saved]  score_distribution_Housing.png
+  [Plot saved]  correlation_Housing.png
+
+==================================================
+====================2. Summary====================
+==================================================
+
+Cleaned Base: 545 rows
+Rows: 545 (no missing values — single-track mode)
+
+==================================================
+===========3. Preprocessing & Encoding============
+==================================================
+
+  [Log Transform]  Train-set skewness = +1.1981  (|skew| > 0.75) -> np.log1p applied.
+                   Metrics and plots reported in original scale (np.expm1).
+  [Imputation]     No missing values — no imputation required.
+  [Encoding]       7 categorical column(s) -> 8 dummy columns (one-hot, drop_first=True):
+                   mainroad, guestroom, basement, hotwaterheating, airconditioning, prefarea, furnishingstatus
+  [Scaling]        StandardScaler fitted on train fold only -> applied to test (no leakage).
+
+  Fitted Null Model
+  Fitted Linear Regression
+  Fitted Lasso
+  Fitted DT (Depth 3)
+  Fitted DT (Unconstrained)
+  Fitted DT (Optimal)
+  Fitted Random Forest
+
+
+Final Feature Count: 13 
+
+Optimal Lasso α  — 0.01677
+Optimal DT depth — 4
+Optimal n_estimators — 10
+
+==================================================
+=======4. Model Evaluation & Visualisation========
+==================================================
+
+  [Plot saved]  Lasso_tuning_Housing.png
+  [Plot saved]  DT_tuning_Housing.png
+  [Plot saved]  RF_tuning_Housing.png
+  [Plot saved]  Null_Model_actual_vs_pred_Housing.png
+  [Plot saved]  Linear_Regression_actual_vs_pred_Housing.png
+  [Plot saved]  Lasso_actual_vs_pred_Housing.png
+  [Plot saved]  DT_Depth_3_actual_vs_pred_Housing.png
+  [Plot saved]  DT_Unconstrained_actual_vs_pred_Housing.png
+  [Plot saved]  DT_Optimal_actual_vs_pred_Housing.png
+  [Plot saved]  Random_Forest_actual_vs_pred_Housing.png
+  [Plot saved]  Linear_Regression_residuals_Housing.png
+  [Plot saved]  Lasso_residuals_Housing.png
+  [Plot saved]  DT_Optimal_residuals_Housing.png
+  [Plot saved]  Random_Forest_residuals_Housing.png
+  [Plot saved]  Lasso_coefficients_Housing.png
+
+--- Lasso Contrast: L_1 Regularisation as Multicollinearity Resolution ---
+  Objective: minimise  RSS(β) + λ·Σ|β_j|
+  The L_1 penalty shrinks redundant coefficients to exactly zero,
+  performing automated feature selection where OLS estimator variance explodes.
+
+  Track A: 12/13 features retained  (λ = 0.016768)
+  Feature                                    β (Lasso)
+  -------------------------------------------------------
+  area                                         +0.1017
+  bathrooms                                    +0.0847
+  airconditioning_yes                          +0.0658
+  stories                                      +0.0605
+  prefarea_yes                                 +0.0439
+  furnishingstatus_unfurnished                 -0.0436
+  basement_yes                                 +0.0369
+  mainroad_yes                                 +0.0311
+  parking                                      +0.0249
+  guestroom_yes                                +0.0143
+  hotwaterheating_yes                          +0.0112
+  bedrooms                                     +0.0108
+  Zeroed-out (1):  furnishingstatus_semi-furnished
+
+  VIF cross-reference: 'bedrooms' (highest VIF = 1.32) -> β = +0.0108  (retained)
+
+  The L_1 constraint forces the optimiser to select at most one
+  predictor from a correlated group, resolving the (X'X)^(-1) variance
+  inflation that destabilises OLS where multicollinearity is present.
+  -> See Lasso_coefficients_Housing.png for the full sparse coefficient profile.
+  [Plot saved]  DT_feature_importance_Housing.png
+  [Plot saved]  RF_feature_importance_Housing.png
+
+==================================================
+========5. Residual Normality Diagnostics=========
+==================================================
+
+
+--- Residual Normality Diagnostics ---
+  Normality is assessed via visual inspection of Q-Q plots and histograms.
+  Skewness/Kurtosis values quantify the extent of departure from normality.
+  Reference: Skewness ≈ 0 (symmetric), Excess Kurtosis ≈ 0 (mesokurtic).
+
+  Model                   Skewness   Ex. Kurtosis
+  ------------------------------------------------
+  Null Model               +1.0841        +1.4432
+  Linear Regression        +1.1778        +2.0176
+  Lasso                    +1.2682        +2.2824
+  DT (Depth 3)             +0.9685        +2.1563
+  DT (Unconstrained)       +0.3381        +1.2841
+  DT (Optimal)             +1.0144        +2.1984
+  Random Forest            +0.7425        +1.0238
+
+  [Normality of residuals is a key assumption for Linear Regression and Lasso;
+   tree-based models make no such assumption.]
+  [Plot saved]  Linear_Regression_normality_Housing.png
+  [Plot saved]  Lasso_normality_Housing.png
+  [Plot saved]  DT_Optimal_normality_Housing.png
+  [Plot saved]  Random_Forest_normality_Housing.png
+
+==================================================
+===========6. Residual Outlier Profile============
+==================================================
+
+
+--- Residual Outlier Profile — Linear Regression ---
+  Top 5% absolute errors: 6 / 109 test observations  (AE ≥ 2.698e+06)
+  Δ = (outlier freq) − (population freq)   [positive Δ = over-represented in worst predictions]
+
+  mainroad:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              13.8       0.0    -13.8  ◄
+  yes                             86.2     100.0    +13.8  ◄
+
+  guestroom:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              82.6      66.7    -15.9  ◄
+  yes                             17.4      33.3    +15.9  ◄
+
+  basement:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              67.9      50.0    -17.9  ◄
+  yes                             32.1      50.0    +17.9  ◄
+
+  hotwaterheating:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  yes                              2.8       0.0     -2.8
+  no                              97.2     100.0     +2.8
+
+  airconditioning:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              65.1      33.3    -31.8  ◄
+  yes                             34.9      66.7    +31.8  ◄
+
+  prefarea:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  no                              76.1      66.7     -9.5  ◄
+  yes                             23.9      33.3     +9.5  ◄
+
+  furnishingstatus:
+  Category                       Pop.%  Outlier%     Δ pp
+  ------------------------------------------------------
+  furnished                       26.6      50.0    +23.4  ◄
+  unfurnished                     37.6      16.7    -20.9  ◄
+  semi-furnished                  35.8      33.3     -2.4
+
+  [Plot saved]  outlier_profile_Housing.png
+
+Final Model Comparison (Strict 80/20 Test Evaluation):
+             Model         RMSE      R²
+        Null Model 2324389.0080 -0.0689
+ Linear Regression 1314648.1954  0.6581
+             Lasso 1393959.9245  0.6156
+      DT (Depth 3) 1751131.4767  0.3933
+DT (Unconstrained) 1626808.2944  0.4764
+      DT (Optimal) 1674241.0359  0.4454
+     Random Forest 1450848.8884  0.5836
