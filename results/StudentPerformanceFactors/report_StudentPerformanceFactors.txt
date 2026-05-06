@@ -119,9 +119,9 @@ Track B (Dropped): 6377 rows
 
 Final Feature Count: 27 
 
-Optimal Lasso α  — Track A: 0.003237,  Track B: 0.003237
-Optimal DT depth — Track A: 3,  Track B: 3
-Optimal n_estimators — Track A: 10,  Track B: 10
+Optimal Lasso α  — Track A: 0.002024,  Track B: 0.002024
+Optimal DT depth — Track A: 4,  Track B: 4
+Optimal n_estimators — Track A: 30,  Track B: 30
 
 ==================================================
 =======4. Model Evaluation & Visualisation========
@@ -148,51 +148,57 @@ Optimal n_estimators — Track A: 10,  Track B: 10
   The L_1 penalty shrinks redundant coefficients to exactly zero,
   performing automated feature selection where OLS estimator variance explodes.
 
-  Track A: 17/27 features retained  (λ = 0.0032375)
+  Track A: 20/27 features retained  (λ = 0.0020236)
   Feature                                    β (Lasso)
   -------------------------------------------------------
-  Attendance                                   +0.0303
-  Hours_Studied                                +0.0222
-  Previous_Scores                              +0.0068
-  Tutoring_Sessions                            +0.0056
-  Access_to_Resources_Low                      -0.0055
-  Parental_Involvement_Low                     -0.0049
-  Family_Income_Low                            -0.0016
-  Peer_Influence_Positive                      +0.0016
-  Parental_Education_Level_High School         -0.0015
-  Motivation_Level_Low                         -0.0013
-  Distance_from_Home_Near                      +0.0011
-  Parental_Involvement_Medium                  -0.0010
-  Learning_Disabilities_Yes                    -0.0009
-  Parental_Education_Level_Postgraduate        +0.0009
-  Extracurricular_Activities_Yes               +0.0008
-  Access_to_Resources_Medium                   -0.0007
-  Internet_Access_Yes                          +0.0003
-  Zeroed-out (10):  Sleep_Hours, Physical_Activity, Motivation_Level_Medium, Family_Income_Medium, Teacher_Quality_Low, Teacher_Quality_Medium, School_Type_Public, Peer_Influence_Neutral, Distance_from_Home_Moderate, Gender_Male
+  Attendance                                   +0.0316
+  Hours_Studied                                +0.0235
+  Previous_Scores                              +0.0081
+  Access_to_Resources_Low                      -0.0079
+  Parental_Involvement_Low                     -0.0075
+  Tutoring_Sessions                            +0.0068
+  Parental_Involvement_Medium                  -0.0035
+  Access_to_Resources_Medium                   -0.0031
+  Peer_Influence_Positive                      +0.0028
+  Family_Income_Low                            -0.0028
+  Motivation_Level_Low                         -0.0025
+  Distance_from_Home_Near                      +0.0024
+  Parental_Education_Level_High School         -0.0024
+  Learning_Disabilities_Yes                    -0.0021
+  Extracurricular_Activities_Yes               +0.0020
+  Parental_Education_Level_Postgraduate        +0.0016
+  Internet_Access_Yes                          +0.0015
+  Teacher_Quality_Low                          -0.0009
+  Teacher_Quality_Medium                       -0.0006
+  Physical_Activity                            +0.0002
+  Zeroed-out (7):  Sleep_Hours, Motivation_Level_Medium, Family_Income_Medium, School_Type_Public, Peer_Influence_Neutral, Distance_from_Home_Moderate, Gender_Male
 
-  Track B: 17/27 features retained  (λ = 0.0032375)
+  Track B: 20/27 features retained  (λ = 0.0020236)
   Feature                                    β (Lasso)
   -------------------------------------------------------
-  Attendance                                   +0.0300
-  Hours_Studied                                +0.0224
-  Previous_Scores                              +0.0064
-  Tutoring_Sessions                            +0.0054
-  Parental_Involvement_Low                     -0.0050
-  Access_to_Resources_Low                      -0.0047
-  Family_Income_Low                            -0.0017
-  Motivation_Level_Low                         -0.0016
-  Peer_Influence_Positive                      +0.0015
-  Distance_from_Home_Near                      +0.0013
-  Parental_Education_Level_High School         -0.0012
-  Parental_Education_Level_Postgraduate        +0.0009
-  Parental_Involvement_Medium                  -0.0007
-  Extracurricular_Activities_Yes               +0.0005
-  Access_to_Resources_Medium                   -0.0004
-  Internet_Access_Yes                          +0.0002
-  Learning_Disabilities_Yes                    -0.0002
-  Zeroed-out (10):  Sleep_Hours, Physical_Activity, Motivation_Level_Medium, Family_Income_Medium, Teacher_Quality_Low, Teacher_Quality_Medium, School_Type_Public, Peer_Influence_Neutral, Distance_from_Home_Moderate, Gender_Male
+  Attendance                                   +0.0313
+  Hours_Studied                                +0.0236
+  Previous_Scores                              +0.0078
+  Parental_Involvement_Low                     -0.0076
+  Access_to_Resources_Low                      -0.0074
+  Tutoring_Sessions                            +0.0067
+  Parental_Involvement_Medium                  -0.0033
+  Access_to_Resources_Medium                   -0.0030
+  Family_Income_Low                            -0.0030
+  Motivation_Level_Low                         -0.0028
+  Peer_Influence_Positive                      +0.0027
+  Distance_from_Home_Near                      +0.0025
+  Parental_Education_Level_High School         -0.0021
+  Extracurricular_Activities_Yes               +0.0018
+  Parental_Education_Level_Postgraduate        +0.0017
+  Internet_Access_Yes                          +0.0015
+  Learning_Disabilities_Yes                    -0.0015
+  Teacher_Quality_Low                          -0.0010
+  Teacher_Quality_Medium                       -0.0009
+  Physical_Activity                            +0.0006
+  Zeroed-out (7):  Sleep_Hours, Motivation_Level_Medium, Family_Income_Medium, School_Type_Public, Peer_Influence_Neutral, Distance_from_Home_Moderate, Gender_Male
 
-  VIF cross-reference: 'Previous_Scores' (highest VIF = 1.00) -> β = +0.0068  (retained)
+  VIF cross-reference: 'Previous_Scores' (highest VIF = 1.00) -> β = +0.0081  (retained)
 
   The L_1 constraint forces the optimiser to select at most one
   predictor from a correlated group, resolving the (X'X)^(-1) variance
@@ -215,11 +221,11 @@ Optimal n_estimators — Track A: 10,  Track B: 10
   ------------------------------------------------------------
   Null Model              +1.1200   +7.1475   +2.0277  +14.2600
   Linear Regression      +15.8122  +272.6417  +12.1956  +153.8924
-  Lasso                   +8.3181  +116.4460   +8.0421  +89.4590
+  Lasso                  +11.2267  +174.1729   +9.8985  +117.3500
   DT (Depth 3)            +3.0202  +29.6016   +4.2175  +38.3025
   DT (Unconstrained)      -3.2554  +31.6223   +0.0858  +40.0602
-  DT (Optimal)            +3.0202  +29.6016   +4.2175  +38.3025
-  Random Forest           +5.0745  +68.5294   +6.5630  +69.4192
+  DT (Optimal)            +3.7861  +40.1875   +3.3118  +49.3143
+  Random Forest           +6.4502  +87.2931   +7.1411  +78.0372
 
   [Normality of residuals is a key assumption for Linear Regression and Lasso;
    tree-based models make no such assumption.]
@@ -329,8 +335,8 @@ Final Model Comparison (Strict 80/20 Test Evaluation):
              Model Track A (RMSE) Track A R² Track B (RMSE) Track B R²
         Null Model         3.6369    -0.0002         3.9589    -0.0012
  Linear Regression         1.5203     0.8252         2.0410     0.7339
-             Lasso         1.8752     0.7341         2.3661     0.6424
+             Lasso         1.7048     0.7802         2.1934     0.6926
       DT (Depth 3)         2.5613     0.5039         3.0082     0.4219
 DT (Unconstrained)         4.0110    -0.2165         3.3309     0.2912
-      DT (Optimal)         2.5613     0.5039         3.0082     0.4219
-     Random Forest         2.1918     0.6367         2.5120     0.5969
+      DT (Optimal)         2.4124     0.5599         2.9779     0.4335
+     Random Forest         2.0521     0.6816         2.4570     0.6144

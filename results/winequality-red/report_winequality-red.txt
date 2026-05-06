@@ -106,9 +106,9 @@ Rows: 1599 (no missing values — single-track mode)
 
 Final Feature Count: 11 
 
-Optimal Lasso α  — 0.1099
-Optimal DT depth — 2
-Optimal n_estimators — 10
+Optimal Lasso α  — 0.05429
+Optimal DT depth — 3
+Optimal n_estimators — 30
 
 ==================================================
 =======4. Model Evaluation & Visualisation========
@@ -135,15 +135,18 @@ Optimal n_estimators — 10
   The L_1 penalty shrinks redundant coefficients to exactly zero,
   performing automated feature selection where OLS estimator variance explodes.
 
-  Track A: 3/11 features retained  (λ = 0.10985)
+  Track A: 6/11 features retained  (λ = 0.054287)
   Feature                                    β (Lasso)
   -------------------------------------------------------
-  alcohol                                      +0.2399
-  volatile_acidity                             -0.1381
-  sulphates                                    +0.0256
-  Zeroed-out (8):  fixed_acidity, citric_acid, residual_sugar, chlorides, free_sulfur_dioxide, total_sulfur_dioxide, density, pH
+  alcohol                                      +0.2761
+  volatile_acidity                             -0.1698
+  sulphates                                    +0.0718
+  total_sulfur_dioxide                         -0.0332
+  chlorides                                    -0.0041
+  fixed_acidity                                +0.0038
+  Zeroed-out (5):  citric_acid, residual_sugar, free_sulfur_dioxide, density, pH
 
-  VIF cross-reference: 'fixed_acidity' (highest VIF = 7.77) -> β = 0.0000  (eliminated by L_1 penalty)
+  VIF cross-reference: 'fixed_acidity' (highest VIF = 7.77) -> β = +0.0038  (retained)
 
   The L_1 constraint forces the optimiser to select at most one
   predictor from a correlated group, resolving the (X'X)^(-1) variance
@@ -166,11 +169,11 @@ Optimal n_estimators — 10
   ------------------------------------------------
   Null Model               +0.3154        +0.1814
   Linear Regression        -0.0227        +0.0457
-  Lasso                    +0.1651        +0.0358
+  Lasso                    +0.0871        +0.0375
   DT (Depth 3)             -0.0829        +0.3703
   DT (Unconstrained)       +0.2209        +1.9514
-  DT (Optimal)             -0.1470        +0.6376
-  Random Forest            -0.1455        +0.5752
+  DT (Optimal)             -0.0829        +0.3703
+  Random Forest            -0.2265        +0.8215
 
   [Normality of residuals is a key assumption for Linear Regression and Lasso;
    tree-based models make no such assumption.]
@@ -190,8 +193,8 @@ Final Model Comparison (Strict 80/20 Test Evaluation):
              Model   RMSE      R²
         Null Model 0.8107 -0.0056
  Linear Regression 0.6245  0.4032
-             Lasso 0.6672  0.3188
+             Lasso 0.6437  0.3660
       DT (Depth 3) 0.6820  0.2882
 DT (Unconstrained) 0.7826  0.0627
-      DT (Optimal) 0.7088  0.2312
-     Random Forest 0.5676  0.5070
+      DT (Optimal) 0.6820  0.2882
+     Random Forest 0.5561  0.5268
